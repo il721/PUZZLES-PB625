@@ -15,6 +15,18 @@
 #include "inkview.h"
 #include "i18n.h"
 
+/* One puzzle's progress, the unit of the save/load-to-file feature (see progress.c). Cell keys and the entry
+ * layout are those of il721/puzzles ("cells": {"row:slot:pos": digit} for Square Rebuses, {"row:col": digit} for
+ * Digit Rebuses), so a progress file can move between the reader and the app. */
+#define PROG_MAX_CELLS 80
+typedef struct { char key[12]; int digit; } ProgCell;
+typedef struct {
+  int solved;
+  long long updated_at; /* ms since 1970 of the last change, 0 = unknown */
+  int ncells;
+  ProgCell cells[PROG_MAX_CELLS];
+} ProgEntry;
+
 typedef struct Module {
   const char *id;          /* short stable id; also the save file: /mnt/ext1/<id>.sav */
   Str title;               /* shown on the home tile (all languages, see i18n.h) */
@@ -28,6 +40,12 @@ typedef struct Module {
   int (*puzzle_count)(void);    /* playable puzzles, tutorials not counted */
   int (*solved_count)(void);
   int (*pick_random)(void);     /* index of a random unsolved puzzle (any if all are solved) */
+  /* Progress file (Settings > Transfer progress). A module without ns is left out of the file. */
+  const char *ns;                                /* namespace in the file, as in the app: "module_rebus" */
+  int (*prog_count)(void);                       /* puzzles including the sample: indices 0..n-1 */
+  const char *(*prog_id)(int i);                 /* puzzle id as in the app's data: "p01", "example" */
+  int (*prog_get)(int i, ProgEntry *e);          /* fills e; 0 if the puzzle was never touched */
+  void (*prog_put)(int i, const ProgEntry *e);   /* replaces puzzle i's progress with e */
 } Module;
 
 extern const Module *const MODULES[];
@@ -47,5 +65,6 @@ void ui_box(int x, int y, int w, int h, int thick, int fill);
 void ui_draw_btn(const UiBtn *b); /* label shrinks (btn -> small -> tiny font) until it fits: Russian/German words are long */
 int ui_hit(const UiBtn *b, int x, int y);
 void ui_log(const char *fmt, int a, int b, int c); /* appends to /mnt/ext1/puzzlebook.txt */
+long long ui_now_ms(void);                          /* ms since 1970 (stamps for ProgEntry.updated_at) */
 
 #endif

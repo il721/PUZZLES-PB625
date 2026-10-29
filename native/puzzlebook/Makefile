@@ -8,7 +8,7 @@ CC  = $(SDK)/bin/arm-obreey-linux-gnueabi-gcc
 OUT = ../../reader/Puzzle Book.app
 CFLAGS = -O2 -Wall -Wextra -std=gnu99
 
-SHELLSRC = shell.c ui.c i18n.c modules.c
+SHELLSRC = shell.c ui.c i18n.c progress.c modules.c
 MODSRC   = rebus/module_rebus.c rebus/rebus_core.c digit/module_digit.c digit/digit_core.c
 
 all:

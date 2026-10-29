@@ -21,6 +21,7 @@ typedef struct { int r, s, k, x, y, w, h; } Cell;
 
 static Grid grids[NUM_PUZZLES];
 static int solved[NUM_PUZZLES];
+static long long stamp[NUM_PUZZLES]; /* ms since 1970 of the last change to each puzzle, 0 = unknown */
 static int cur, mode = M_PLAY;
 static int selr = -1, sels = -1, selk = -1;
 static Marks marks;
@@ -72,7 +73,7 @@ static void save_state(void) {
   fprintf(f, "v1 %d\n", cur);
   for (i = 0; i < NUM_PUZZLES; i++) {
     grid_save(&grids[i], buf);
-    fprintf(f, "%d %s\n", solved[i], buf);
+    fprintf(f, "%d %s %lld\n", solved[i], buf, stamp[i]);
   }
   fclose(f);
 }
@@ -90,8 +91,10 @@ static void load_state(void) {
   for (i = 0; i < NUM_PUZZLES && fgets(line, sizeof line, f); i++) {
     char *sp = strchr(line, ' ');
     if (!sp) continue;
+    char *sp2 = strchr(sp + 1, ' '); /* optional stamp after the grid; older saves have none */
     solved[i] = atoi(line) ? 1 : 0;
     grid_load(&grids[i], sp + 1);
+    stamp[i] = sp2 ? strtoll(sp2 + 1, NULL, 10) : 0;
   }
   fclose(f);
 }
@@ -398,6 +401,7 @@ static void enter_digit(int d) {
   Grid *g = &grids[cur];
   if (selr < 0 || !grid_set(g, selr, sels, selk, d)) return;
   have_marks = 0; reset_armed = 0; msg[0] = 0;
+  stamp[cur] = ui_now_ms();
   if (grid_wins(g)) {
     solved[cur] = 1;
     strcpy(msg, tr(&S_SOLVED_NEXT));
@@ -414,7 +418,7 @@ static void do_check(void) {
   have_marks = 1;
   grid_violations(g, &marks);
   for (i = 0; i < 75; i++) if (g->digit[i / 15][(i / 3) % 5][i % 3] < 0 && (i % 3) < g->width[i / 15][(i / 3) % 5]) empty++;
-  if (grid_wins(g)) { solved[cur] = 1; strcpy(msg, tr(&S_SOLVED_NEXT)); save_state(); }
+  if (grid_wins(g)) { solved[cur] = 1; stamp[cur] = ui_now_ms(); strcpy(msg, tr(&S_SOLVED_NEXT)); save_state(); }
   else if (marks.count) snprintf(msg, sizeof msg, tr(&S_BROKEN), marks.count);
   else snprintf(msg, sizeof msg, tr(&S_NO_MISTAKES), empty);
 }
@@ -424,7 +428,7 @@ static void do_button(int id) {
   if (id >= 100 && id < 100 + NUM_PUZZLES) { mode = M_PLAY; open_puzzle(id - 100); return; }
   switch (id) {
     case B_DEL:
-      if (selr >= 0 && grid_clear(g, selr, sels, selk)) { have_marks = 0; msg[0] = 0; save_state(); }
+      if (selr >= 0 && grid_clear(g, selr, sels, selk)) { have_marks = 0; msg[0] = 0; stamp[cur] = ui_now_ms(); save_state(); }
       break;
     case B_CHECK: do_check(); break;
     case B_RESET:
@@ -512,6 +516,48 @@ static int rebus_event(int type, int par1, int par2) {
   return 0;
 }
 
+/* ---------- progress file hooks (shell.h) ---------- */
+
+static int rebus_prog_count(void) { return NUM_PUZZLES; }
+static const char *rebus_prog_id(int i) { return PUZZLES[i].id; }
+
+static int rebus_prog_get(int i, ProgEntry *e) {
+  const Grid *g = &grids[i];
+  int r, s, k, n = 0;
+  for (r = 0; r < 5; r++)
+    for (s = 0; s < 5; s++)
+      for (k = 0; k < g->width[r][s]; k++)
+        if (!g->given[r][s][k] && g->digit[r][s][k] >= 0 && n < PROG_MAX_CELLS) {
+          snprintf(e->cells[n].key, sizeof e->cells[n].key, "%d:%d:%d", r, s, k);
+          e->cells[n++].digit = g->digit[r][s][k];
+        }
+  e->ncells = n;
+  e->solved = solved[i];
+  e->updated_at = stamp[i];
+  return n > 0 || solved[i];
+}
+
+/* "row:slot:pos" -> grid_set; keys that name no editable cell are ignored */
+static void rebus_prog_put(int i, const ProgEntry *e) {
+  Grid *g = &grids[i];
+  int n;
+  grid_reset(g);
+  for (n = 0; n < e->ncells; n++) {
+    const char *k = e->cells[n].key;
+    char *end;
+    long r = strtol(k, &end, 10), s, p;
+    if (*end != ':') continue;
+    s = strtol(end + 1, &end, 10);
+    if (*end != ':') continue;
+    p = strtol(end + 1, &end, 10);
+    if (*end) continue;
+    grid_set(g, (int)r, (int)s, (int)p, e->cells[n].digit);
+  }
+  solved[i] = e->solved ? 1 : 0;
+  stamp[i] = e->updated_at;
+  if (i == cur) { have_marks = 0; reset_armed = 0; msg[0] = 0; select_first(); }
+}
+
 /* the sample puzzle (index 0) is a tutorial and not counted */
 static int rebus_count(void) { return NUM_PUZZLES - 1; }
 
@@ -544,4 +590,9 @@ const Module module_rebus = {
     rebus_count,
     rebus_solved,
     rebus_pick_random,
+    "module_rebus",
+    rebus_prog_count,
+    rebus_prog_id,
+    rebus_prog_get,
+    rebus_prog_put,
 };

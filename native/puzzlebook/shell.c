@@ -5,12 +5,14 @@
 #include <time.h>
 
 #include "shell.h"
+#include "progress.h"
 
-enum { H_RANDOM = 1000, H_HELP, H_EXIT, H_PREV, H_NEXT, H_SETTINGS, H_BACK, H_LANG = 1100, H_TILE = 2000 };
-enum { HM_HOME, HM_HELP, HM_SETTINGS };
+enum { H_RANDOM = 1000, H_HELP, H_EXIT, H_PREV, H_NEXT, H_SETTINGS, H_BACK, H_EXPORT, H_IMPORT, H_CANCEL, H_APPLY, H_LANG = 1100, H_TILE = 2000 };
+enum { HM_HOME, HM_HELP, HM_SETTINGS, HM_CONFIRM };
 
 static const Module *active; /* NULL = home screen */
 static int home_mode = HM_HOME, page, updates;
+static char settings_msg[200], import_date[24]; /* result line of the last progress action; date of the file waiting for confirmation */
 
 static UiBtn btns[40];
 static int nbtn;
@@ -32,6 +34,29 @@ static const Str S_LANG_SYSTEM = S("System default", "Как в системе",
 static const Str S_LANG_RU = S("Русский", "Русский", "Русский");
 static const Str S_LANG_EN = S("English", "English", "English");
 static const Str S_LANG_DE = S("Deutsch", "Deutsch", "Deutsch");
+static const Str S_SYNC_SECTION = S("Transfer progress", "Перенос прогресса", "Fortschritt übertragen");
+static const Str S_SYNC_HINT = S("Save your progress to a file and open it on another device. The file is puzzlebook-progress.json on the reader's drive.",
+                                 "Сохраните прогресс в файл и откройте его на другом устройстве. Файл puzzlebook-progress.json лежит на диске ридера.",
+                                 "Fortschritt in eine Datei speichern und auf einem anderen Gerät öffnen. Die Datei puzzlebook-progress.json liegt auf dem Laufwerk des Readers.");
+static const Str S_EXPORT = S("Save progress to a file", "Сохранить прогресс в файл", "Fortschritt in Datei speichern");
+static const Str S_IMPORT = S("Load progress from a file", "Загрузить прогресс из файла", "Fortschritt aus Datei laden");
+static const Str S_EXPORT_OK = S("Progress saved.", "Прогресс сохранён.", "Fortschritt gespeichert.");
+static const Str S_EXPORT_FAIL = S("Could not save the file.", "Не удалось сохранить файл.", "Datei konnte nicht gespeichert werden.");
+static const Str S_NO_FILE = S("There is no puzzlebook-progress.json on the reader's drive. Copy the file there over USB first.",
+                               "На диске ридера нет файла puzzlebook-progress.json. Сначала скопируйте его туда по USB.",
+                               "Auf dem Laufwerk des Readers liegt keine puzzlebook-progress.json. Kopieren Sie die Datei zuerst per USB dorthin.");
+static const Str S_BAD_FORMAT = S("That is not a progress file.", "Это не файл прогресса.", "Das ist keine Fortschrittsdatei.");
+static const Str S_NEWER = S("This file was made by a newer version of the app. Please update.",
+                             "Файл создан более новой версией приложения. Обновите приложение.",
+                             "Diese Datei stammt aus einer neueren App-Version. Bitte aktualisieren Sie die App.");
+static const Str S_CONFIRM_TITLE = S("Load progress?", "Загрузить прогресс?", "Fortschritt laden?");
+static const Str S_CONFIRM_BODY = S("File created: %s. Your current progress will not be lost - your best results are kept.",
+                                    "Файл создан: %s. Ваш текущий прогресс не будет потерян — лучшие результаты сохранятся.",
+                                    "Datei erstellt: %s. Ihr bisheriger Fortschritt geht nicht verloren — die besten Ergebnisse bleiben erhalten.");
+static const Str S_CANCEL = S("Cancel", "Отмена", "Abbrechen");
+static const Str S_LOAD = S("Load", "Загрузить", "Laden");
+static const Str S_NOTHING_NEW = S("No new results found.", "Новых результатов не найдено.", "Keine neuen Ergebnisse gefunden.");
+static const Str S_IMPORT_OK = S("Puzzles added: %d, updated: %d.", "Добавлено головоломок: %d, обновлено: %d.", "Rätsel hinzugefügt: %d, aktualisiert: %d.");
 
 static const Str S_HELP_TEXT = S(
     "Puzzle Book bundles several puzzle games. Tap a game to open it; it remembers where you were.\n\n"
@@ -122,30 +147,66 @@ static void draw_help(int W, int H) {
   DrawTextRect(16, 64, W - 32, H - 80, (char *)tr(&S_HELP_TEXT), ALIGN_LEFT);
 }
 
-/* Settings: one section, Language, as radio rows (System default, Русский, English, Deutsch). */
+/* Settings: Language (radio rows: System default, Русский, English, Deutsch) and Transfer progress (save to / load
+ * from a file). Portrait stacks the two sections, landscape puts them side by side. */
 static void draw_settings(int W, int H) {
   static const Str *const NAME[4] = {&S_LANG_SYSTEM, &S_LANG_RU, &S_LANG_EN, &S_LANG_DE};
   static const int VALUE[4] = {LANG_SYSTEM, LANG_RU, LANG_EN, LANG_DE};
-  int m = 8, gap = 10, tb = 58, i, rh = (W > H) ? 66 : 84, y;
+  int land = W > H, m = 8, gap = 8, tb = 58, i, rh = land ? 72 : 62, y, x, w, hint_lines, hdr = ui_f_btn->height + 12;
   const char *back_t = tr(&S_BACK);
   nbtn = 0;
   add_btn(W - m - label_w(back_t, 120, 150), m, label_w(back_t, 120, 150), tb - m, H_BACK, back_t);
   ui_text_center(ui_f_title, BLACK, m, m, W - 2 * m - label_w(back_t, 120, 150) - gap, tb - m, tr(&S_SETTINGS));
   ui_draw_btn(&btns[0]);
 
+  x = m; w = land ? (W - 3 * m) / 2 : W - 2 * m;
   SetFont(ui_f_btn, BLACK);
-  DrawString(m + 8, tb + 16, tr(&S_LANGUAGE));
-  y = tb + 16 + ui_f_btn->height + 10;
+  DrawString(x + 8, tb + 10, tr(&S_LANGUAGE));
+  y = tb + 10 + hdr;
   for (i = 0; i < 4; i++, y += rh + gap) {
     int on = lang_setting() == VALUE[i], my = y + (rh - 26) / 2;
-    ui_box(m, y, W - 2 * m, rh, on ? 4 : 2, on ? 0xDDDDDD : WHITE);
-    DrawRect(m + 24, my, 26, 26, BLACK);
-    DrawRect(m + 25, my + 1, 24, 24, BLACK);
-    if (on) FillArea(m + 31, my + 7, 12, 12, BLACK);
+    ui_box(x, y, w, rh, on ? 4 : 2, on ? 0xDDDDDD : WHITE);
+    DrawRect(x + 24, my, 26, 26, BLACK);
+    DrawRect(x + 25, my + 1, 24, 24, BLACK);
+    if (on) FillArea(x + 31, my + 7, 12, 12, BLACK);
     SetFont(on ? ui_f_btn : ui_f_small, BLACK);
-    DrawString(m + 24 + 26 + 24, y + (rh - (on ? ui_f_btn : ui_f_small)->height) / 2, tr(NAME[i]));
-    add_btn(m, y, W - 2 * m, rh, H_LANG + i, "");
+    DrawString(x + 24 + 26 + 24, y + (rh - (on ? ui_f_btn : ui_f_small)->height) / 2, tr(NAME[i]));
+    add_btn(x, y, w, rh, H_LANG + i, "");
   }
+
+  if (land) { x = m + w + m; y = tb + 10; } else y += 4;
+  SetFont(ui_f_btn, BLACK);
+  DrawString(x + 8, y, tr(&S_SYNC_SECTION));
+  y += hdr;
+  SetFont(ui_f_small, BLACK);
+  hint_lines = land ? 7 : 4; /* the landscape column is half as wide */
+  DrawTextRect(x + 8, y, w - 16, ui_f_small->height * hint_lines, (char *)tr(&S_SYNC_HINT), ALIGN_LEFT);
+  y += ui_f_small->height * hint_lines + 8;
+  add_btn(x, y, w, rh, H_EXPORT, tr(&S_EXPORT));
+  ui_draw_btn(&btns[nbtn - 1]);
+  y += rh + gap;
+  add_btn(x, y, w, rh, H_IMPORT, tr(&S_IMPORT));
+  ui_draw_btn(&btns[nbtn - 1]);
+  y += rh + gap;
+  if (settings_msg[0]) {
+    SetFont(ui_f_small, BLACK);
+    DrawTextRect(x + 8, y, w - 16, H - y - m, settings_msg, ALIGN_LEFT);
+  }
+}
+
+/* "Load progress?" with the file's date, Cancel / Load */
+static void draw_confirm(int W, int H) {
+  int bw = 200, bh = 70, y = H / 2, gap = 20, bx = (W - 2 * bw - gap) / 2;
+  char t[240];
+  ui_text_center(ui_f_title, BLACK, 0, 8, W, 50, tr(&S_CONFIRM_TITLE));
+  snprintf(t, sizeof t, tr(&S_CONFIRM_BODY), import_date);
+  SetFont(ui_f_small, BLACK);
+  DrawTextRect(24, 90, W - 48, y - 110, t, ALIGN_LEFT);
+  nbtn = 0;
+  add_btn(bx, y, bw, bh, H_CANCEL, tr(&S_CANCEL));
+  add_btn(bx + bw + gap, y, bw, bh, H_APPLY, tr(&S_LOAD));
+  ui_draw_btn(&btns[0]);
+  ui_draw_btn(&btns[1]);
 }
 
 static void redraw_home(int full) {
@@ -154,6 +215,7 @@ static void redraw_home(int full) {
   ClearScreen();
   if (home_mode == HM_HELP) draw_help(W, H);
   else if (home_mode == HM_SETTINGS) draw_settings(W, H);
+  else if (home_mode == HM_CONFIRM) draw_confirm(W, H);
   else draw_home(W, H);
   updates++;
   if (full || updates % 8 == 0) FullUpdate();
@@ -207,8 +269,30 @@ static void home_tap(int x, int y) {
       ui_log("language setting %d -> %d", lang_setting(), lang(), 0);
       redraw_home(1);
     }
-    else if (b->id == H_SETTINGS) { home_mode = HM_SETTINGS; redraw_home(1); }
+    else if (b->id == H_SETTINGS) { settings_msg[0] = 0; home_mode = HM_SETTINGS; redraw_home(1); }
     else if (b->id == H_BACK) { home_mode = HM_HOME; redraw_home(1); }
+    else if (b->id == H_EXPORT) {
+      snprintf(settings_msg, sizeof settings_msg, "%s", tr(progress_export() == PR_OK ? &S_EXPORT_OK : &S_EXPORT_FAIL));
+      redraw_home(1);
+    }
+    else if (b->id == H_IMPORT) {
+      int r = progress_open(import_date, sizeof import_date);
+      if (r == PR_OK) { home_mode = HM_CONFIRM; settings_msg[0] = 0; }
+      else snprintf(settings_msg, sizeof settings_msg, "%s", tr(r == PR_NOFILE ? &S_NO_FILE : (r == PR_NEWER ? &S_NEWER : &S_BAD_FORMAT)));
+      redraw_home(1);
+    }
+    else if (b->id == H_CANCEL) { progress_discard(); home_mode = HM_SETTINGS; redraw_home(1); }
+    else if (b->id == H_APPLY) {
+      int added, updated, k;
+      progress_apply(&added, &updated);
+      progress_discard();
+      for (k = 0; k < NUM_MODULES; k++) MODULES[k]->save();
+      if (added + updated == 0) snprintf(settings_msg, sizeof settings_msg, "%s", tr(&S_NOTHING_NEW));
+      else snprintf(settings_msg, sizeof settings_msg, tr(&S_IMPORT_OK), added, updated);
+      ui_log("progress loaded: added %d, updated %d", added, updated, 0);
+      home_mode = HM_SETTINGS;
+      redraw_home(1);
+    }
     else if (b->id == H_RANDOM) random_puzzle();
     else if (b->id == H_HELP) { home_mode = HM_HELP; redraw_home(1); }
     else if (b->id == H_EXIT) CloseApp();
@@ -248,7 +332,8 @@ static int shell_handler(int type, int par1, int par2) {
       ui_log("key %d", par1, 0, 0);
       if (active) active->event(type, par1, par2);
       else if (par1 == KEY_BACK) {
-        if (home_mode != HM_HOME) { home_mode = HM_HOME; redraw_home(1); }
+        if (home_mode == HM_CONFIRM) { progress_discard(); home_mode = HM_SETTINGS; redraw_home(1); }
+        else if (home_mode != HM_HOME) { home_mode = HM_HOME; redraw_home(1); }
         else CloseApp();
       } else if (par1 == KEY_MENU && home_mode == HM_HOME) {
         home_mode = HM_SETTINGS; redraw_home(1);

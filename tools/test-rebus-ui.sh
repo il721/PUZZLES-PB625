@@ -9,25 +9,25 @@ OUT=${OUT:-$T}
 mkdir -p "$OUT"
 N=native/puzzlebook
 gcc -Wall -Wextra -std=gnu99 -Itools/fake-inkview -c tools/fake-inkview/inkview_svg.c -o "$T/shim.o"
-for f in $N/shell.c $N/ui.c $N/i18n.c tools/test-modules1.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c; do
-  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" \
+for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c tools/test-modules1.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c; do
+  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" -DPROGF="\"$T/progress.json\"" \
     -Itools/fake-inkview -I$N -I$N/rebus -c $f -o "$T/$(basename $f .c).o"
 done
 gcc "$T"/*.o -o "$T/ui"
 
 # second variant: two modules (template module registered through tools/test-modules2.c)
 T2="$T/two"; mkdir -p "$T2"
-for f in $N/shell.c $N/ui.c $N/i18n.c tools/test-modules2.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/example/module_example.c; do
+for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c tools/test-modules2.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/example/module_example.c; do
   sv=rebus.sav; case $f in *example*) sv=example.sav;; esac
-  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/$sv\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" \
+  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/$sv\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" -DPROGF="\"$T/progress.json\"" \
     -Itools/fake-inkview -I$N -I$N/rebus -c $f -o "$T2/$(basename $f .c).o"
 done
 gcc "$T/shim.o" "$T2"/*.o -o "$T/ui2"
 
 # third variant: the real registry (modules.c): Square Rebuses + Digit Rebuses
 T3="$T/full"; mkdir -p "$T3"
-for f in $N/shell.c $N/ui.c $N/i18n.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/digit/module_digit.c $N/digit/digit_core.c; do
-  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DDIGITSAVEF="\"$T/digit.sav\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" \
+for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/digit/module_digit.c $N/digit/digit_core.c; do
+  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DDIGITSAVEF="\"$T/digit.sav\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" -DPROGF="\"$T/progress.json\"" \
     -Itools/fake-inkview -I$N -I$N/rebus -I$N/digit -c $f -o "$T3/$(basename $f .c).o"
 done
 gcc "$T/shim.o" "$T3"/*.o -o "$T/ui3"
@@ -188,6 +188,150 @@ PY
   if REBUS_SCRIPT="$T/digit-$lg.script" "$T/ui3"; then echo "PASS digit rebuses $lg"; else echo "FAIL digit rebuses $lg"; RC=1; fi
 done
 rm -f "$T/cfg" "$T/digit.sav"
+
+# ---- Settings > Transfer progress: save to a file, load it into a clean state, merge rules, bad files, ru/de
+P="$T/progress.json"
+rm -f "$T/rebus.sav" "$T/digit.sav" "$T/cfg" "$T/global.cfg" "$P"
+python3 - "$T" "$OUT" <<'PY'
+import json, sys
+T, OUT = sys.argv[1:3]
+dg = json.load(open('native/puzzlebook/digit/module02.json'))['puzzles'][1]
+L = ['size 600 800', 'show', 'tapl Digit Rebuses']
+for r in range(4):
+    for c in range(4): L.append('tapl %d' % dg['answer'][r][c])
+L += ['expect Solved!', 'tapl Home', 'tapl Square Rebuses', 'tapl 1', 'tapl Home', 'tapl Settings',
+      'expect Transfer progress', 'svg %s/portrait-settings-sync.svg' % OUT, 'tapl Save progress to a file', 'expect Progress saved.',
+      'svg %s/portrait-settings-saved.svg' % OUT, 'quit']
+open(T + '/prog-export.script', 'w').write('\n'.join(L) + '\n')
+open(T + '/prog-import.script', 'w').write('\n'.join([
+  'size 600 800', 'show', 'expect 0 / 18 solved', 'tapl Settings', 'tapl Load progress from a file', 'expect Load progress?', 'expect File created:',
+  'svg %s/portrait-confirm.svg' % OUT, 'tapl Cancel', 'expect Transfer progress',
+  'tapl Load progress from a file', 'tapl Load', 'expect Puzzles added: 2, updated: 0.',
+  'tapl Load progress from a file', 'tapl Load', 'expect No new results found.', 'tapl Back', 'expect 1 / 18 solved', 'quit']) + '\n')
+PY
+if REBUS_SCRIPT="$T/prog-export.script" "$T/ui3"; then echo "PASS progress export"; else echo "FAIL progress export"; RC=1; fi
+python3 - "$P" "$T/rebus.sav" <<'PY' || { echo "FAIL progress file content"; RC=1; }
+import json, sys
+b = json.load(open(sys.argv[1]))
+assert b['bundleVersion'] == 1 and len(b['exportedAt']) >= 19
+d = b['namespaces']['module_digit_rebus']['puzzles']
+r = b['namespaces']['module_rebus']['puzzles']
+assert list(d) == ['p01'] and d['p01']['solved'] is True and len(d['p01']['cells']) == 16 and d['p01']['cells']['0:0'] == 4
+assert list(r) == ['p01'] and r['p01']['solved'] is False and len(r['p01']['cells']) == 1
+assert r['p01']['updatedAt'] > 1700000000000 and d['p01']['updatedAt'] > 1700000000000
+assert r['p01']['elapsedMs'] == 0 and r['p01']['checks'] == 0
+print('PASS progress file content')
+PY
+rm -f "$T/rebus.sav" "$T/digit.sav"
+if REBUS_SCRIPT="$T/prog-import.script" "$T/ui3"; then echo "PASS progress import into a clean state"; else echo "FAIL progress import"; RC=1; fi
+python3 - "$P" "$T/rebus.sav" <<'PY' || { echo "FAIL imported stamp kept"; RC=1; }
+import json, sys
+b = json.load(open(sys.argv[1]))
+want = b['namespaces']['module_rebus']['puzzles']['p01']['updatedAt']
+line = open(sys.argv[2]).read().split('\n')[2]  # p01 is the second puzzle line (after the header and the sample)
+assert line.split()[-1] == str(want), (line, want)
+print('PASS imported stamp kept')
+PY
+
+# merge rules with a bundle written like the app's (extra fields, unknown module, unknown puzzle, floats, escapes)
+python3 - "$T" <<'PY'
+import json, sys
+T = sys.argv[1]
+rb = {p['id']: p for p in json.load(open('native/puzzlebook/rebus/module01.json'))['puzzles']}
+dg = {p['id']: p for p in json.load(open('native/puzzlebook/digit/module02.json'))['puzzles']}
+def rebus_cells(p):
+    cells = {}
+    given = {(g[0], g[1], g[2]) for g in p['givens']}
+    def num(r, s):
+        return p['total'] if (r, s) == (4, 4) else p['rows'][s]['result'] if r == 4 else (p['rows'][r]['nums'][s] if s < 4 else p['rows'][r]['result'])
+    for r in range(5):
+        for s in range(5):
+            for k, ch in enumerate(num(r, s)):
+                if (r, s, k) not in given: cells['%d:%d:%d' % (r, s, k)] = int(ch)
+    return cells
+def digit_cells(p):
+    return {'%d:%d' % (r, c): p['answer'][r][c] for r in range(4) for c in range(4)}
+def entry(cells, solved, upd=None, **extra):
+    e = {'cells': cells, 'elapsedMs': 123456.0, 'checks': 3, 'solved': solved}
+    if upd is not None: e['updatedAt'] = upd
+    e.update(extra); return e
+first_key = sorted(rebus_cells(rb['p01']))[0]
+key4 = sorted(rebus_cells(rb['p04']))[0]   # an editable cell of p04
+B1 = {'bundleVersion': 1, 'exportedAt': '2026-10-29T12:34:56.789',
+  'namespaces': {
+    'module_rebus': {'puzzles': {
+        'p01': entry({first_key: 9}, False, 1000),              # older than the local one: local kept
+        'p02': entry(rebus_cells(rb['p02']), True, 5, solvedAt='2026-10-01T10:00:00', firstSolveElapsedMs=61000),
+        'p03': entry(rebus_cells(rb['p03']), True, 7),
+        'p04': entry({key4: 3, 'zz': 4, '9:9:9': 1, '0:0:9': 2, '0:0:1': 12}, False, 20000000000000),
+        'p99': entry({'0:0:0': 1}, True, 1)}, 'tutorial': {'completed': True, 'completedAt': '2026-10-01'}},
+    'module_digit_rebus': {'puzzles': {
+        'p01': entry({}, False, 99999999999999),               # nothing in it: ignored
+        'p02': entry(digit_cells(dg['p02']), True, 9)}},
+    'module_domino': {'puzzles': {'p01': {'placed': [[0, 1], [1.5e2, 'a"b\u00e9']], 'solved': False, 'nested': {'a': [1, [2, [3, {'b': None}]]]}}}},
+    'settings': {'language': 'ru'}}}
+json.dump(B1, open(T + '/bundle1.json', 'w'), indent=2)
+B2 = {'bundleVersion': 1, 'namespaces': {
+    'module_rebus': {'puzzles': {
+        'p01': entry(rebus_cells(rb['p01']), True, 3),          # solved beats the local unsolved copy
+        'p04': entry({key4: 5}, False, 30000000000000),     # later stamp than the local copy: wins
+        'p02': entry({'0:0:0': 1}, False, 99999999999999)}}}}  # local copy is solved: kept
+json.dump(B2, open(T + '/bundle2.json', 'w'))
+open(T + '/prog-merge1.script', 'w').write('\n'.join(['size 600 800', 'show', 'tapl Settings', 'tapl Load progress from a file', 'expect File created: 2026-10-29 12:34',
+  'tapl Load', 'expect Puzzles added: 4, updated: 0.', 'tapl Back', 'expect 2 / 15 solved', 'expect 2 / 18 solved', 'quit']) + '\n')
+open(T + '/prog-merge2.script', 'w').write('\n'.join(['size 600 800', 'show', 'tapl Settings', 'tapl Load progress from a file', 'expect File created: ',
+  'tapl Load', 'expect Puzzles added: 0, updated: 2.', 'tapl Back', 'expect 3 / 15 solved', 'expect 2 / 18 solved', 'quit']) + '\n')
+PY
+# local state for the merge: rebus p01 with one digit and a fresh stamp (older than nothing: 1000 < now), digit p01 solved
+rm -f "$T/rebus.sav" "$T/digit.sav"
+cp "$P" "$T/export.json"
+python3 - "$T" <<'PY'
+import sys, json
+T = sys.argv[1]
+open(T + '/prog-seed.script', 'w').write('\n'.join(['size 600 800', 'show', 'tapl Settings', 'tapl Load progress from a file', 'tapl Load', 'quit']) + '\n')
+PY
+REBUS_SCRIPT="$T/prog-seed.script" "$T/ui3" >/dev/null   # loads the export from above: rebus p01 (1 digit), digit p01 (solved)
+cp "$T/bundle1.json" "$P"
+if REBUS_SCRIPT="$T/prog-merge1.script" "$T/ui3"; then echo "PASS progress merge: added, kept newer local, ignored unknown/empty"; else echo "FAIL progress merge 1"; RC=1; fi
+cp "$T/bundle2.json" "$P"
+if REBUS_SCRIPT="$T/prog-merge2.script" "$T/ui3"; then echo "PASS progress merge: solved beats unsolved, later stamp wins, solved kept"; else echo "FAIL progress merge 2"; RC=1; fi
+KEY4=$(python3 -c "import json;p=[q for q in json.load(open('native/puzzlebook/rebus/module01.json'))['puzzles'] if q['id']=='p04'][0];g={(x[0],x[1],x[2]) for x in p['givens']};print(next('%d:%d:%d'%(r,s,k) for r in range(5) for s in range(5) for k in range(3) if (r,s,k) not in g))")
+python3 - "$T/rebus.sav" "$KEY4" <<'PY' || { echo "FAIL merged save file"; RC=1; }
+import sys
+lines = open(sys.argv[1]).read().split('\n')
+KEY4 = sys.argv[2]
+p01, p04 = lines[2].split(), lines[5].split()
+assert p01[0] == '1' and p01[2] == '3'          # solved, stamp of the incoming copy
+assert p04[0] == '0' and p04[2] == '30000000000000'  # unsolved, stamp of the winner
+r_, s_, k_ = map(int, KEY4.split(':'))
+assert p04[1][r_ * 15 + s_ * 3 + k_] == '5', p04[1]
+print('PASS merged save file')
+PY
+# bad files and a missing file
+for case in none garbage array nobundle newer; do
+  case $case in
+    none) rm -f "$P"; EXP="There is no puzzlebook-progress.json";;
+    garbage) printf '{not json' > "$P"; EXP="That is not a progress file.";;
+    array) printf '[1, 2, 3]' > "$P"; EXP="That is not a progress file.";;
+    nobundle) printf '{"foo": 1}' > "$P"; EXP="That is not a progress file.";;
+    newer) printf '{"bundleVersion": 2, "namespaces": {}}' > "$P"; EXP="made by a newer version";;
+  esac
+  printf 'size 600 800\nshow\ntapl Settings\ntapl Load progress from a file\nexpect %s\nexpect Transfer progress\nquit\n' "$EXP" > "$T/prog-bad.script"
+  if REBUS_SCRIPT="$T/prog-bad.script" "$T/ui3"; then echo "PASS progress file $case"; else echo "FAIL progress file $case"; RC=1; fi
+done
+# Russian and German texts of the section, and the landscape layout
+for lg in ru de; do
+  printf 'lang=%s\n' $lg > "$T/cfg"
+  if [ $lg = ru ]; then EXPS="Перенос прогресса"; EXPE="Прогресс сохранён."; BK="Назад"; else EXPS="Fortschritt übertragen"; EXPE="Fortschritt gespeichert."; BK="Zurück"; fi
+  for sz in "600 800 portrait" "800 600 landscape"; do
+    set -- $sz
+    printf 'size %s %s\nshow\ntap 40 760\n' $1 $2 > "$T/prog-$lg.script"
+    printf 'tapl %s\nexpect %s\nsvg %s/%s-settings-sync-%s.svg\nquit\n' "$( [ $lg = ru ] && echo Настройки || echo Einstellungen )" "$EXPS" "$OUT" $3 $lg >> "$T/prog-$lg.script"
+    sed -i '/^tap 40 760$/d' "$T/prog-$lg.script"
+    if REBUS_SCRIPT="$T/prog-$lg.script" "$T/ui3"; then echo "PASS settings transfer section $lg $3"; else echo "FAIL settings transfer section $lg $3"; RC=1; fi
+  done
+done
+rm -f "$T/cfg" "$P" "$T/export.json" "$T/rebus.sav" "$T/digit.sav"
 
 # ---- languages and the Settings screen: Russian and German walk-throughs, "system" follows the reader's global.cfg,
 # the choice is saved to the cfg file and read back by the next start

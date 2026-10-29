@@ -80,4 +80,5 @@ const Module module_example = {
       "Шаблон: скопируйте native/puzzlebook/example, чтобы начать новую игру.",
       "Eine Vorlage: native/puzzlebook/example kopieren, um ein neues Spiel zu beginnen."),
     init, enter, event, save, count, solved, pick_random,
+    NULL, NULL, NULL, NULL, NULL, /* no progress file */
 };

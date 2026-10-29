@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <time.h>
 
 #include "shell.h"
 
@@ -16,6 +17,8 @@ void ui_log(const char *fmt, int a, int b, int c) {
   fputc('\n', f);
   fclose(f);
 }
+
+long long ui_now_ms(void) { return (long long)time(NULL) * 1000LL; }
 
 ifont *ui_open_font(const char *name, int size) {
   ifont *f = OpenFont(name, size, 1);

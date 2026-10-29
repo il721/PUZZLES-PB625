@@ -17,6 +17,7 @@ buttons, log), `modules.c` (registry), `rebus/` (module "Square Rebuses"), `exam
    (tutorials not counted) and `pick_random`.
 2. `modules.c`: add `extern const Module module_<name>;` and `&module_<name>` to `MODULES[]` (tile order).
 3. `Makefile`: add its `.c` files to `MODSRC`.
+   Progress file: to take part in Settings > Transfer progress, fill the last five `Module` fields (`ns` = the source app's namespace such as `module_rebus`, `prog_count/id/get/put`) and keep a per-puzzle `ui_now_ms()` stamp that you set on every change and save after the grid; see `rebus/module_rebus.c`. Modules without `ns` are left out of the file.
 4. Save file: `/mnt/ext1/<id>.sav` (own format; keep it a plain text file). Use `atoi`/`strtol`, not `sscanf`/`fscanf`
    (they need GLIBC_2.7; the firmware's libc may be older). Only call inkview functions already used here
    unless you check the device has them (`readelf -Ws --dyn-syms` on the binary lists what it imports).
