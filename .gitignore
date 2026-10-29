@@ -1,0 +1,4 @@
+# PocketBook SDK 4.8.1 (about 1.7 GB), cloned only to build: see README.md
+sdk/
+# PocketBook SDK clone used in the cloud sandbox
+SDK_481/
