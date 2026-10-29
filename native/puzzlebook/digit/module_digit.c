@@ -38,8 +38,8 @@ static int title_x, title_y, title_w; /* title strip in the top bar */
 static int st_x, st_y, st_w;          /* status line */
 static int gx, gy, gw, gh;            /* grid area */
 
-static ifont *f_digit;
-static int f_digit_size;
+static ifont *f_digit, *f_hint;
+static int f_digit_size, f_hint_size;
 
 /* ---------- texts (English, Russian, German; i18n.h) ---------- */
 
@@ -154,6 +154,14 @@ static void ensure_digit_font(int size) {
   f_digit_size = size;
 }
 
+/* the grey hint digits of an empty cell: as large as three of them side by side fit into the cell */
+static void ensure_hint_font(int size) {
+  if (f_hint && size == f_hint_size) return;
+  if (f_hint) CloseFont(f_hint);
+  f_hint = ui_open_font("LiberationSans", size);
+  f_hint_size = size;
+}
+
 /* ---------- layout (portrait or landscape) ---------- */
 
 static void add_btn(int x, int y, int w, int h, int id, const char *label) {
@@ -237,6 +245,7 @@ static void build_and_draw_grid(int draw) {
       e->r = r; e->c = c; e->x = xcol[c]; e->y = yrow[r]; e->w = bs; e->h = bs;
     }
   if (!draw) return;
+  ensure_hint_font((bs - 18) / 3 * 100 / 58); /* a digit is about 0.56 em wide */
 
   /* operators: along the rows between the cells, down the columns between the rows; the last one is "=" */
   for (r = 0; r < 4; r++)
@@ -265,12 +274,15 @@ static void build_and_draw_grid(int draw) {
         t[0] = (char)('0' + d);
         ui_text_center(f_digit, bad ? WHITE : BLACK, xcol[c], yrow[r], bs, bs, t);
       } else {
-        char hint[16];
-        int k, n = 0;
+        int k, n = 0, slot = (bs - 12) / 3, hx;
+        for (k = 0; k <= 9; k++) n += glyph_admits(p->glyph[r][c], k);
+        hx = xcol[c] + (bs - n * slot) / 2;
         for (k = 0; k <= 9; k++)
-          if (glyph_admits(p->glyph[r][c], k)) { if (n) hint[n++] = ' '; hint[n++] = (char)('0' + k); }
-        hint[n] = 0;
-        ui_text_center(ui_f_small, 0x555555, xcol[c], yrow[r], bs, bs, hint);
+          if (glyph_admits(p->glyph[r][c], k)) {
+            char h[2] = {(char)('0' + k), 0};
+            ui_text_center(f_hint, 0x555555, hx, yrow[r], slot, bs, h);
+            hx += slot;
+          }
       }
     }
 }
