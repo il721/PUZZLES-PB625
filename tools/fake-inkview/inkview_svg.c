@@ -7,6 +7,8 @@
  *   tapl TEXT     EVT_POINTERUP at the centre of the first text drawn as exactly TEXT
  *   tapd K        EVT_POINTERUP at the centre of the K-th (from 0) text that is a single digit, in drawing order
  *                 (Domino Solitaire draws its 56 cell digits row by row and no other single digits)
+ *   tapi K        EVT_POINTERUP at the centre of the K-th (from 0) text drawn, in drawing order (Alphabet Labyrinth: the 64
+ *                 cell letters follow the title and the 7 button labels, so cell n is item 8 + n)
  *   svg FILE      write the current screen
  *   expect TEXT   fail unless TEXT is drawn on the current screen
  *   expect_not TEXT  fail if TEXT is drawn on the current screen
@@ -189,6 +191,10 @@ int main(void) {
       for (i = 0; i < nitems && !hit; i++)
         if (items[i].t[0] >= '0' && items[i].t[0] <= '9' && !items[i].t[1] && k++ == a) { handler(EVT_POINTERUP, items[i].cx, items[i].cy); hit = 1; }
       if (!hit) { printf("FAIL tapd: no digit item %d\n", a); failed++; }
+    }
+    else if (sscanf(line, "tapi %d", &a) == 1) {
+      if (a >= 0 && a < nitems) handler(EVT_POINTERUP, items[a].cx, items[a].cy);
+      else { printf("FAIL tapi: no item %d\n", a); failed++; }
     }
     else if (sscanf(line, "key %d", &a) == 1) handler(EVT_KEYPRESS, a, 0);
     else if (sscanf(line, "orient %d", &a) == 1) { if (a & 1) { int t = W; W = H; H = t; } handler(EVT_ORIENTATION, a, 0); }

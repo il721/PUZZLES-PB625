@@ -122,7 +122,15 @@ static int jfind(int obj, const char *name) {
 static void put_entry(FILE *f, const char *id, const ProgEntry *e, int last) {
   int k;
   fprintf(f, "          \"%s\": {\n", id);
-  if (e->ndom > 0) {
+  if (e->has_lists) {
+    static const char *const names[PROG_LISTS] = {"chainA", "chainZ", "crosses", "marks"};
+    int l;
+    for (l = 0; l < PROG_LISTS; l++) {
+      fprintf(f, "%s            \"%s\": [", l ? ",\n" : "", names[l]);
+      for (k = 0; k < e->nlist[l]; k++) fprintf(f, "%s[%d, %d]", k ? ", " : "", e->list[l][k][0], e->list[l][k][1]);
+      fprintf(f, "]");
+    }
+  } else if (e->ndom > 0) {
     fprintf(f, "            \"placed\": [");
     for (k = 0; k < e->ndom; k++)
       fprintf(f, "%s[[%d, %d], [%d, %d]]", k ? ", " : "", e->dom[k][0], e->dom[k][1], e->dom[k][2], e->dom[k][3]);
@@ -240,7 +248,29 @@ static int read_entry(int node, ProgEntry *e) {
       for (a = 0; a < 4; a++) e->dom[e->ndom][a] = (unsigned char)v[a];
       e->ndom++;
     }
-  return e->solved || e->ncells > 0 || e->ndom > 0; /* an entry with nothing in it is not progress */
+  /* "chainA", "chainZ", "crosses", "marks": [[r,c], ...]; a list that is missing or malformed is empty, and the module
+   * rejects the whole entry if the lists do not make a valid board (like the source's fromJson) */
+  {
+    static const char *const names[PROG_LISTS] = {"chainA", "chainZ", "crosses", "marks"};
+    int l;
+    for (l = 0; l < PROG_LISTS; l++) {
+      int ln = jfind(node, names[l]), a, b, ok = ln >= 0 && pool[ln].type == J_ARR;
+      if (!ok) continue;
+      e->has_lists = 1;
+      for (a = pool[ln].child; a >= 0 && e->nlist[l] < PROG_MAX_LIST; a = pool[a].next) {
+        int v[2], n = 0, good = pool[a].type == J_ARR;
+        for (b = good ? pool[a].child : -1; b >= 0; b = pool[b].next) {
+          if (pool[b].type != J_NUM || n >= 2 || pool[b].num < 0 || pool[b].num > 255) { good = 0; break; }
+          v[n++] = (int)pool[b].num;
+        }
+        if (!good || n != 2) continue;
+        e->list[l][e->nlist[l]][0] = (unsigned char)v[0];
+        e->list[l][e->nlist[l]][1] = (unsigned char)v[1];
+        e->nlist[l]++;
+      }
+    }
+  }
+  return e->solved || e->ncells > 0 || e->ndom > 0 || e->nlist[0] > 1 || e->nlist[1] > 1 || e->nlist[2] > 0 || e->nlist[3] > 0; /* an entry with nothing in it is not progress */
 }
 
 void progress_apply(int *added, int *updated) {

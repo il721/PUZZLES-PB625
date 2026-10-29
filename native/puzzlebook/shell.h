@@ -17,10 +17,13 @@
 
 /* One puzzle's progress, the unit of the save/load-to-file feature (see progress.c). Cell keys and the entry
  * layout are those of il721/puzzles ("cells": {"row:slot:pos": digit} for Square Rebuses, {"row:col": digit} for
- * Digit Rebuses, "placed": [[[r,c],[r,c]], ...] for Domino Solitaire), so a progress file can move between the
+ * Digit Rebuses, "placed": [[[r,c],[r,c]], ...] for Domino Solitaire, "chainA"/"chainZ"/"crosses"/"marks": [[r,c], ...]
+ * for Alphabet Labyrinth), so a progress file can move between the
  * reader and the app. progress.c clears the entry before every prog_get, so a module only sets what it uses. */
 #define PROG_MAX_CELLS 80
 #define PROG_MAX_DOMS 28
+#define PROG_LISTS 4
+#define PROG_MAX_LIST 64
 typedef struct { char key[12]; int digit; } ProgCell;
 typedef struct {
   int solved;
@@ -29,6 +32,9 @@ typedef struct {
   ProgCell cells[PROG_MAX_CELLS];
   int ndom;             /* dominoes ("placed"), each {r1, c1, r2, c2} */
   unsigned char dom[PROG_MAX_DOMS][4];
+  int has_lists;        /* cell lists: list[0..3] = chainA, chainZ, crosses, marks; each cell is {row, col} */
+  int nlist[PROG_LISTS];
+  unsigned char list[PROG_LISTS][PROG_MAX_LIST][2];
 } ProgEntry;
 
 typedef struct Module {

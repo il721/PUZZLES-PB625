@@ -26,9 +26,9 @@ gcc "$T/shim.o" "$T2"/*.o -o "$T/ui2"
 
 # third variant: the real registry (modules.c): Square Rebuses + Digit Rebuses
 T3="$T/full"; mkdir -p "$T3"
-for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/digit/module_digit.c $N/digit/digit_core.c $N/domino/module_domino.c $N/domino/domino_core.c; do
-  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DDIGITSAVEF="\"$T/digit.sav\"" -DDOMINOSAVEF="\"$T/domino.sav\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" -DPROGF="\"$T/progress.json\"" \
-    -Itools/fake-inkview -I$N -I$N/rebus -I$N/digit -I$N/domino -c $f -o "$T3/$(basename $f .c).o"
+for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/digit/module_digit.c $N/digit/digit_core.c $N/domino/module_domino.c $N/domino/domino_core.c $N/labyrinth/module_labyrinth.c $N/labyrinth/labyrinth_core.c; do
+  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DDIGITSAVEF="\"$T/digit.sav\"" -DDOMINOSAVEF="\"$T/domino.sav\"" -DLABYRINTHSAVEF="\"$T/labyrinth.sav\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" -DPROGF="\"$T/progress.json\"" \
+    -Itools/fake-inkview -I$N -I$N/rebus -I$N/digit -I$N/domino -I$N/labyrinth -c $f -o "$T3/$(basename $f .c).o"
 done
 gcc "$T/shim.o" "$T3"/*.o -o "$T/ui3"
 
@@ -166,13 +166,13 @@ for W, H, tag in ((600, 800, 'portrait'), (800, 600, 'landscape')):
     open('%s/digit-%s.script' % (T, tag), 'w').write(script(W, H, tag))
 PY
 for tag in portrait landscape; do
-  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/cfg" "$T/global.cfg"
+  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/cfg" "$T/global.cfg"
   if REBUS_SCRIPT="$T/digit-$tag.script" "$T/ui3"; then echo "PASS digit rebuses $tag"; else echo "FAIL digit rebuses $tag"; RC=1; fi
 done
 grep -c '^1 ' "$T/digit.sav" | sed 's/^/digit puzzles saved solved: /'
 # Digit Rebuses in Russian and German (cells, pad, messages, list, help)
 for lg in ru de; do
-  rm -f "$T/digit.sav" "$T/rebus.sav" "$T/domino.sav"; printf 'lang=%s\n' $lg > "$T/cfg"
+  rm -f "$T/digit.sav" "$T/rebus.sav" "$T/domino.sav" "$T/labyrinth.sav"; printf 'lang=%s\n' $lg > "$T/cfg"
   if [ $lg = ru ]; then TILE="Цифровые ребусы"; T1="Ребус 1/18"; CH="Проверить"; OKM="Ошибок нет"; LS="Выберите ребус"; HP="Как играть"; HM="Домой"; SOL="Решено!"; LST="Список"; else TILE="Ziffernrebusse"; T1="Rätsel 1/18"; CH="Prüfen"; OKM="Keine Fehler"; LS="Rätsel wählen"; HP="Spielregeln"; HM="Start"; SOL="Gelöst!"; LST="Liste"; fi
   python3 - "$T" "$lg" "$TILE" "$T1" "$CH" "$OKM" "$LS" "$HP" "$HM" "$SOL" "$LST" <<'PY'
 import json, sys
@@ -253,7 +253,7 @@ for W, H, tag in ((600, 800, 'portrait'), (800, 600, 'landscape')):
     open('%s/domino-%s.script' % (T, tag), 'w').write(script(W, H, tag))
 PY
 for tag in portrait landscape; do
-  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/cfg" "$T/global.cfg"
+  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/cfg" "$T/global.cfg"
   if REBUS_SCRIPT="$T/domino-$tag.script" "$T/ui3"; then echo "PASS domino solitaire $tag"; else echo "FAIL domino solitaire $tag"; RC=1; fi
 done
 # the save file: 19 puzzle lines, 18 solved, the sample not solved after its Reset; saved boards reload through the app
@@ -277,7 +277,7 @@ print('PASS domino save file')
 PY
 # Domino Solitaire in Russian and German
 for lg in ru de; do
-  rm -f "$T/domino.sav" "$T/rebus.sav" "$T/digit.sav"; printf 'lang=%s\n' $lg > "$T/cfg"
+  rm -f "$T/domino.sav" "$T/labyrinth.sav" "$T/rebus.sav" "$T/digit.sav"; printf 'lang=%s\n' $lg > "$T/cfg"
   if [ $lg = ru ]; then TILE="Домино-пасьянс"; T1="Домино 1/18"; PL="Выставлено: 2 из 28"; DUP="повторяющиеся"; RS="Сбросить"; RS2="ещё раз"; LS="Выберите головоломку"; HP="Как играть"; HM="Домой"; SOL="Решено!"; LST="Список"; else TILE="Domino-Patience"; T1="Domino 1/18"; PL="Gelegt: 2 von 28"; DUP="doppelt"; RS="Reset"; RS2="Noch einmal"; LS="Rätsel wählen"; HP="Spielregeln"; HM="Start"; SOL="Gelöst!"; LST="Liste"; fi
   python3 - "$T" "$lg" "$TILE" "$T1" "$PL" "$DUP" "$RS" "$RS2" "$LS" "$HP" "$HM" "$SOL" "$LST" <<'PY'
 import json, sys
@@ -309,11 +309,127 @@ open('%s/domino-%s.script' % (T, lg), 'w').write('\n'.join(L) + '\n')
 PY
   if REBUS_SCRIPT="$T/domino-$lg.script" "$T/ui3"; then echo "PASS domino solitaire $lg"; else echo "FAIL domino solitaire $lg"; RC=1; fi
 done
-rm -f "$T/cfg" "$T/domino.sav"
+rm -f "$T/cfg" "$T/domino.sav" "$T/labyrinth.sav"
+
+# ---- Alphabet Labyrinth (fourth real module, real registry): solve all 19 puzzles by tapping cells, portrait and landscape
+python3 - "$T" "$OUT" <<'PY'
+import json, sys
+T, OUT = sys.argv[1:3]
+data = json.load(open('native/puzzlebook/labyrinth/module04.json'))['puzzles']
+SOL = [[r * 8 + c for r, c in p['solution']] for p in data]
+def adj(a, b): return abs(a // 8 - b // 8) + abs(a % 8 - b % 8) == 1
+
+def taps_for(sol):
+    """tap order: the first m cells from the top-left end, the rest backwards from the bottom-right end; a split that
+    never makes the heads touch before the last tap (a joined path accepts no more cells)"""
+    for m in range(1, 32):
+        order = sol[1:m + 1] + sol[31:m:-1]
+        a, z = [0], [63]
+        ok = True
+        for i, cell in enumerate(order):
+            if a and cell == sol[len(a)] and len(a) <= m: a.append(cell)
+            else: z.append(cell)
+            if i < len(order) - 1 and adj(a[-1], z[-1]): ok = False; break
+        if ok: return order
+    raise SystemExit('no split for a puzzle')
+TAPS = [taps_for(s) for s in SOL]
+G = 8   # cell n is text item 8 + n: the title and the 7 button labels come first
+def tap(cell): return 'tapi %d' % (G + cell)
+
+def script(W, H, tag):
+    land = W > H
+    L = ['size %d %d' % (W, H), 'show', 'expect 0 / 18 solved'] + (['tapl >'] if land else []) + \
+        ['expect Alphabet Labyrinth', 'tapl Alphabet Labyrinth', 'expect Labyrinth 1/18', 'expect Letters: 1 of 33'.replace('1', '2'),
+         'svg %s/%s-lab-start.svg' % (OUT, tag)]
+    order = list(range(1, len(data))) + [0]
+    for n, i in enumerate(order):
+        for k, cell in enumerate(TAPS[i]):
+            L.append(tap(cell))
+            if i == 4 and k == 14: L += ['expect Letters: 17 of 33', 'svg %s/%s-lab-half.svg' % (OUT, tag)]
+        L += ['expect Letters: 33 of 33', 'expect Solved!']
+        if i == 4: L.append('svg %s/%s-lab-solved.svg' % (OUT, tag))
+        if n < len(order) - 1: L.append('tapl >')
+    # on the Example (solved): Reset twice, a mark, a manual cross, an extension, the duplicate warning
+    ex = data[0]['grid']
+    L += ['tapl Reset', 'expect Tap Reset again', 'tapl Reset', 'expect Letters: 2 of 33', 'expect_not Solved!']
+    L += [tap(27), 'svg %s/%s-lab-mark.svg' % (OUT, tag), 'tapl Cross', 'expect Cross mode', tap(40), tap(7), 'svg %s/%s-lab-cross.svg' % (OUT, tag),
+          'tapl Cross', 'expect_not Cross mode', tap(8), 'expect Letters: 3 of 33', tap(16), 'expect Letters: 4 of 33',
+          'tapl Cross', tap(8), 'expect Letters: 2 of 33', 'tapl Cross']          # cut back to cell 8 in cross mode: only the anchor stays
+    # duplicate: along the top row А О Д Т Ч З У А (the last А is the twin of the first)
+    L += ['tapl Reset', 'tapl Reset'] + [tap(c) for c in range(1, 8)] + ['expect twice', 'expect Letters: 9 of 33', 'svg %s/%s-lab-dup.svg' % (OUT, tag),
+          tap(7), 'expect Letters: 8 of 33', 'expect_not twice',
+          'tapl List', 'expect Alphabet Labyrinth - choose a puzzle', 'svg %s/%s-lab-list.svg' % (OUT, tag), 'tapl Back',
+          'tapl ?', 'expect How to play', 'svg %s/%s-lab-help.svg' % (OUT, tag), 'key 27', 'expect Example',
+          'key 23', 'expect 18 / 18 solved', 'tapl Alphabet Labyrinth', 'tapl List', 'tapl Home', 'expect 18 / 18 solved',
+          'tapl Alphabet Labyrinth', 'tapl Home', 'expect 18 / 18 solved', 'key 27', 'expect_closed']
+    return '\n'.join(L) + '\n'
+
+for W, H, tag in ((600, 800, 'portrait'), (800, 600, 'landscape')):
+    open('%s/lab-%s.script' % (T, tag), 'w').write(script(W, H, tag))
+json.dump({'sol': SOL, 'taps': TAPS}, open(T + '/lab-solutions.json', 'w'))
+PY
+for tag in portrait landscape; do
+  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/cfg" "$T/global.cfg"
+  if REBUS_SCRIPT="$T/lab-$tag.script" "$T/ui3"; then echo "PASS alphabet labyrinth $tag"; else echo "FAIL alphabet labyrinth $tag"; RC=1; fi
+done
+# the save file: 19 lines; the 18 solved puzzles hold the chains of the solution (chain A + reversed chain Z)
+python3 - "$T/labyrinth.sav" "$T/lab-solutions.json" <<'PY' || { echo "FAIL labyrinth save file"; RC=1; }
+import json, sys
+lines = open(sys.argv[1]).read().split('\n')
+d = json.load(open(sys.argv[2]))
+assert lines[0].startswith('v1 ')
+rows = [l.split(' ') for l in lines[1:20]]
+assert len(rows) == 19 and all(len(r) == 6 for r in rows), rows[0]
+assert sum(r[0] == '1' for r in rows) == 18
+cell = lambda ch: ord(ch) - 48
+for i in range(1, 19):
+    a = [cell(c) for c in rows[i][1]]; z = [cell(c) for c in rows[i][2]]
+    assert a + z[::-1] == d['sol'][i], i
+    assert rows[i][3] == '-' and rows[i][4] == '-' and int(rows[i][5]) > 1700000000000
+# the Example after the walk-through: top-row chain 0..6 (the duplicate A cell was taken back), no marks/crosses
+assert rows[0][0] == '0' and rows[0][1] == '01234567'[:7] and rows[0][2] == 'o' and rows[0][3] == '-' and rows[0][4] == '-', rows[0]
+print('PASS labyrinth save file')
+PY
+# marks and crosses reach the save file: mark cell 27, cross cell 40, in both modes
+python3 - "$T" <<'PY'
+import json, sys
+T = sys.argv[1]
+open(T + '/lab-marks.script', 'w').write('\n'.join(['size 600 800', 'show', 'tapl Alphabet Labyrinth', 'expect Labyrinth 1/18', 'tapi 35', 'tapl Cross', 'tapi 48', 'tapi 8', 'tapl Cross', 'tapi 9', 'expect Letters: 3 of 33', 'tapl Home', 'quit']) + '\n')
+PY
+rm -f "$T/labyrinth.sav"
+if REBUS_SCRIPT="$T/lab-marks.script" "$T/ui3"; then echo "PASS labyrinth marks and crosses"; else echo "FAIL labyrinth marks and crosses"; RC=1; fi
+python3 - "$T/labyrinth.sav" <<'PY' || { echo "FAIL labyrinth marks save"; RC=1; }
+import sys
+r = open(sys.argv[1]).read().split('\n')[2].split(' ')
+# cell 27 marked (item 35 = 8 + 27), cell 40 crossed in cross mode, the anchor (item 8) ignored, cell 1 extends chain A
+assert r[0] == '0' and r[1] == '01' and r[2] == 'o' and r[3] == chr(48 + 40) and r[4] == chr(48 + 27), r
+print('PASS labyrinth marks save')
+PY
+# Labyrinth in Russian (Cyrillic letters) and German (stand-in glyphs)
+for lg in ru de; do
+  rm -f "$T/labyrinth.sav" "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav"; printf 'lang=%s\n' $lg > "$T/cfg"
+  if [ $lg = ru ]; then TILE="Лабиринт-алфавит"; T1="Лабиринт 1/18"; PL="Букв: 2 из 33"; DUP="дважды"; CR="Крест"; CRM="Режим"; LS="Выберите лабиринт"; HP="Как играть"; HM="Домой"; SOL="Решено!"; LST="Список"; LET="Я"; else TILE="Buchstaben-Labyrinth"; T1="Labyrinth 1/18"; PL="Buchstaben: 2 von 33"; DUP="doppelt"; CR="Kreuz"; CRM="Streichmodus"; LS="Labyrinth wählen"; HP="Spielregeln"; HM="Start"; SOL="Gelöst!"; LST="Liste"; LET="Z"; fi
+  python3 - "$T" "$lg" "$TILE" "$T1" "$PL" "$DUP" "$CR" "$CRM" "$LS" "$HP" "$HM" "$SOL" "$LST" "$LET" <<'PY'
+import json, sys
+T, lg, TILE, T1, PL, DUP, CR, CRM, LS, HP, HM, SOL, LST, LET = sys.argv[1:]
+d = json.load(open(T + '/lab-solutions.json'))
+def tap(cell): return 'tapi %d' % (8 + cell)
+L = ['size 600 800', 'show', 'tapl ' + TILE, 'expect ' + T1, 'expect ' + PL, 'expect ' + LET] + [tap(c) for c in range(1, 8)] + ['expect ' + DUP, tap(7),
+     'tapl ' + CR, 'expect ' + CRM, 'tapl ' + CR, 'tapl ?', 'expect ' + HP, 'tap 300 400', 'tapl ' + LST, 'expect ' + LS, 'tapl ' + HM, 'expect ' + TILE,
+     'tapl ' + TILE]
+# clear the top-row chain (tap the head back) and solve p01
+for c in range(6, 0, -1): L.append(tap(c))
+for cell in d['taps'][1]: L.append(tap(cell))
+L += ['expect ' + SOL, 'quit']
+open('%s/lab-%s.script' % (T, lg), 'w').write('\n'.join(L) + '\n')
+PY
+  if REBUS_SCRIPT="$T/lab-$lg.script" "$T/ui3"; then echo "PASS alphabet labyrinth $lg"; else echo "FAIL alphabet labyrinth $lg"; RC=1; fi
+done
+rm -f "$T/cfg" "$T/labyrinth.sav"
 
 # ---- Domino Solitaire progress: "placed" lists in the progress file, both ways, invalid dominoes skipped
 P="$T/progress.json"
-rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/cfg" "$P"
+rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/cfg" "$P"
 python3 - "$T" <<'PY'
 import json, sys
 T = sys.argv[1]
@@ -343,7 +459,7 @@ assert d['p02']['elapsedMs'] == 0 and d['p02']['checks'] == 0
 assert b['namespaces']['module_rebus']['puzzles'] == {} or 'module_rebus' in b['namespaces']
 print('PASS domino progress file content')
 PY
-rm -f "$T/domino.sav"
+rm -f "$T/domino.sav" "$T/labyrinth.sav"
 if REBUS_SCRIPT="$T/dprog-import.script" "$T/ui3"; then echo "PASS domino progress import"; else echo "FAIL domino progress import"; RC=1; fi
 # a bundle in the app's own shape: overlapping, non-adjacent, out-of-range and malformed dominoes are skipped, the rest kept
 python3 - "$T" <<'PY'
@@ -358,7 +474,7 @@ open(T + '/dprog-merge.script', 'w').write('\n'.join(['size 600 800', 'show', 't
   'expect Puzzles added: 1, updated: 0.', 'quit']) + '\n')
 PY
 cp "$T/bundle-domino.json" "$P"
-rm -f "$T/domino.sav"
+rm -f "$T/domino.sav" "$T/labyrinth.sav"
 if REBUS_SCRIPT="$T/dprog-merge.script" "$T/ui3"; then echo "PASS domino progress app-shaped bundle"; else echo "FAIL domino progress app-shaped bundle"; RC=1; fi
 python3 - "$T/domino.sav" <<'PY' || { echo "FAIL domino merged save file"; RC=1; }
 import sys
@@ -369,11 +485,76 @@ assert p03[1].count('R') == 2 and p03[1].count('D') == 0 and p03[1][0] == 'R' an
 assert all(r[1] == '.' * 56 for i, r in enumerate(rows) if i != 3)
 print('PASS domino merged save file')
 PY
-rm -f "$T/domino.sav" "$P"
+rm -f "$T/domino.sav" "$T/labyrinth.sav" "$P"
+
+# ---- Alphabet Labyrinth progress: chainA/chainZ/crosses/marks lists in the progress file, both ways, bad lists -> fresh board
+P="$T/progress.json"
+rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/cfg" "$P"
+python3 - "$T" <<'PY'
+import json, sys
+T = sys.argv[1]
+d = json.load(open(T + '/lab-solutions.json'))
+def tap(cell): return 'tapi %d' % (8 + cell)
+L = ['size 600 800', 'show', 'tapl Alphabet Labyrinth']
+L += [tap(c) for c in d['taps'][1]]                       # p01 solved
+L += ['expect Solved!', 'tapl >', tap(d['taps'][2][0]), tap(27), 'tapl Cross', tap(40), 'tapl Cross',   # p02: one cell, a mark, a cross
+      'tapl Home', 'tapl Settings', 'tapl Save progress to a file', 'expect Progress saved.', 'quit']
+open(T + '/lprog-export.script', 'w').write('\n'.join(L) + '\n')
+open(T + '/lprog-import.script', 'w').write('\n'.join([
+  'size 600 800', 'show', 'tapl Settings', 'tapl Load progress from a file', 'tapl Load', 'expect Puzzles added: 2, updated: 0.', 'tapl Back',
+  'expect 1 / 18 solved', 'tapl Alphabet Labyrinth', 'expect Labyrinth 1/18', 'expect Letters: 33 of 33', 'tapl >', 'expect Labyrinth 2/18', 'expect Letters: 3 of 33', 'quit']) + '\n')
+PY
+if REBUS_SCRIPT="$T/lprog-export.script" "$T/ui3"; then echo "PASS labyrinth progress export"; else echo "FAIL labyrinth progress export"; RC=1; fi
+python3 - "$P" "$T/lab-solutions.json" <<'PY' || { echo "FAIL labyrinth progress file content"; RC=1; }
+import json, sys
+b = json.load(open(sys.argv[1]))
+d = json.load(open(sys.argv[2]))
+l = b['namespaces']['module_labyrinth']['puzzles']
+assert list(l) == ['p01', 'p02'], list(l)
+p1, p2 = l['p01'], l['p02']
+rc = lambda cells: [[c // 8, c % 8] for c in cells]
+assert p1['solved'] is True and 'cells' not in p1 and 'placed' not in p1
+assert p1['chainA'][0] == [0, 0] and p1['chainZ'][0] == [7, 7] and p1['crosses'] == [] and p1['marks'] == []
+assert [tuple(x) for x in p1['chainA'] + p1['chainZ'][::-1]] == [tuple(x) for x in rc(d['sol'][1])]
+assert p2['solved'] is False and len(p2['chainA']) == 2 and p2['chainZ'] == [[7, 7]] and p2['crosses'] == [[5, 0]] and p2['marks'] == [[3, 3]], p2
+assert p2['updatedAt'] > 1700000000000 and p2['elapsedMs'] == 0 and p2['checks'] == 0
+print('PASS labyrinth progress file content')
+PY
+rm -f "$T/labyrinth.sav"
+if REBUS_SCRIPT="$T/lprog-import.script" "$T/ui3"; then echo "PASS labyrinth progress import"; else echo "FAIL labyrinth progress import"; RC=1; fi
+# the app's shape; an entry whose chains are broken gives a fresh board (solved flag kept), a good one is restored
+python3 - "$T" <<'PY'
+import json, sys
+T = sys.argv[1]
+B = {'bundleVersion': 1, 'namespaces': {'module_labyrinth': {'puzzles': {
+  'p03': {'chainA': [[0, 0], [1, 0], [2, 0]], 'chainZ': [[7, 7], [7, 6]], 'crosses': [[4, 4], [9, 9]], 'marks': None, 'solved': False, 'updatedAt': 1700000000000, 'elapsedMs': 9000},
+  'p04': {'chainA': [[0, 0], [2, 0]], 'chainZ': [[7, 7]], 'crosses': [], 'marks': [], 'solved': True, 'updatedAt': 1700000000000},
+  'p05': {'chainA': [[0, 0], [1, 0]], 'chainZ': [[7, 7], [7, 6]], 'crosses': [[1, 1]], 'marks': [[2, 2], [3, 3]], 'solved': False},
+  'p06': {'chainA': [[1, 1]], 'chainZ': [[7, 7]], 'crosses': [], 'marks': [], 'solved': False},
+  'example': {'chainA': [[0, 0]], 'chainZ': [[7, 7]], 'crosses': [], 'marks': [], 'solved': False}}}}}
+json.dump(B, open(T + '/bundle-lab.json', 'w'))
+open(T + '/lprog-merge.script', 'w').write('\n'.join(['size 600 800', 'show', 'tapl Settings', 'tapl Load progress from a file', 'tapl Load',
+  'expect Puzzles added: 3, updated: 0.', 'quit']) + '\n')
+PY
+cp "$T/bundle-lab.json" "$P"
+rm -f "$T/labyrinth.sav"
+if REBUS_SCRIPT="$T/lprog-merge.script" "$T/ui3"; then echo "PASS labyrinth progress app-shaped bundle"; else echo "FAIL labyrinth progress app-shaped bundle"; RC=1; fi
+python3 - "$T/labyrinth.sav" <<'PY' || { echo "FAIL labyrinth merged save file"; RC=1; }
+import sys
+rows = [l.split(' ') for l in open(sys.argv[1]).read().split('\n')[1:20]]
+ch = lambda cells: ''.join(chr(48 + c) for c in cells)
+p03, p04, p05 = rows[3], rows[4], rows[5]
+assert p03[0] == '0' and p03[1] == '0' and p03[2] == 'o' and p03[3] == '-' and p03[4] == '-' and p03[5] == '1700000000000', p03   # a cross out of the grid spoils the whole entry
+assert p04[0] == '1' and p04[1] == '0' and p04[2] == 'o'       # broken chain (not adjacent): fresh board, solved kept
+assert p05[1] == ch([0, 8]) and p05[3] == ch([9]) and p05[4] == ch([18, 27]), p05
+assert all(r[1] == '0' and r[2] == 'o' for i, r in enumerate(rows) if i not in (3, 5)), rows
+print('PASS labyrinth merged save file')
+PY
+rm -f "$T/labyrinth.sav" "$P"
 
 # ---- Settings > Transfer progress: save to a file, load it into a clean state, merge rules, bad files, ru/de
 P="$T/progress.json"
-rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/cfg" "$T/global.cfg" "$P"
+rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/cfg" "$T/global.cfg" "$P"
 python3 - "$T" "$OUT" <<'PY'
 import json, sys
 T, OUT = sys.argv[1:3]
@@ -404,7 +585,7 @@ assert r['p01']['updatedAt'] > 1700000000000 and d['p01']['updatedAt'] > 1700000
 assert r['p01']['elapsedMs'] == 0 and r['p01']['checks'] == 0
 print('PASS progress file content')
 PY
-rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav"
+rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav"
 if REBUS_SCRIPT="$T/prog-import.script" "$T/ui3"; then echo "PASS progress import into a clean state"; else echo "FAIL progress import"; RC=1; fi
 python3 - "$P" "$T/rebus.sav" <<'PY' || { echo "FAIL imported stamp kept"; RC=1; }
 import json, sys
@@ -465,7 +646,7 @@ open(T + '/prog-merge2.script', 'w').write('\n'.join(['size 600 800', 'show', 't
   'tapl Load', 'expect Puzzles added: 0, updated: 2.', 'tapl Back', 'expect 3 / 15 solved', 'expect 2 / 18 solved', 'quit']) + '\n')
 PY
 # local state for the merge: rebus p01 with one digit and a fresh stamp (older than nothing: 1000 < now), digit p01 solved
-rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav"
+rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav"
 cp "$P" "$T/export.json"
 python3 - "$T" <<'PY'
 import sys, json
