@@ -3,7 +3,7 @@
  * UI: tap a free cell to select it (thick frame), then tap a letter of the keyword below (or beside) the grid to put
  * it there; the eraser empties the cell. A letter that repeats in a row, column or diagonal turns both cells black.
  * The letter buttons turn grey once all n copies of that letter are on the board; the letter in the selected cell is
- * black. Portrait and landscape layouts. Progress in /mnt/ext1/squareword.sav. */
+ * black. Portrait layout only (the reader does not rotate). Progress in /mnt/ext1/squareword.sav. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -144,7 +144,7 @@ static void ensure_pal_font(int size) {
   f_pal_size = size;
 }
 
-/* ---------- layout (portrait or landscape) ---------- */
+/* ---------- layout (portrait) ---------- */
 
 static void add_btn(int x, int y, int w, int h, int id, const char *label) {
   Btn *b = &btns[nbtn++];
@@ -152,8 +152,8 @@ static void add_btn(int x, int y, int w, int h, int id, const char *label) {
 }
 
 static void layout(int W, int H) {
-  int land = W > H, m = 8, gap = 6, n = boards[cur].p->n, k;
-  int tb = land ? 52 : 58;
+  int m = 8, gap = 6, n = boards[cur].p->n, k;
+  int tb = 58;
   int by, bh, bx, bw, ph;
   nbtn = 0;
 
@@ -164,7 +164,7 @@ static void layout(int W, int H) {
   title_w = W - 2 * m - 120 - 90 - 60 - 3 * gap;
 
   gy = tb + 6;
-  if (!land) {
+  {
     /* grid on top, then the status, the letter row (n letters + eraser) and the row of buttons */
     int pw;
     bh = (H > 760) ? 64 : 58;
@@ -182,27 +182,6 @@ static void layout(int W, int H) {
     for (k = 0; k < n; k++) add_btn(m + k * (pw + gap), by - gap - ph, pw, ph, B_LETTER + k, letter_txt[k]);
     add_btn(m + n * (pw + gap), by - gap - ph, W - m - (m + n * (pw + gap)), ph, B_ERASE, "×");
     bx = m; bw = W - 2 * m;
-  } else {
-    /* grid on the left; on the right the letters (three per row, the eraser last), the status and the buttons */
-    int rw, rows, pw;
-    cs = (H - gy - m) / n;
-    if (cs > (W - 2 * m - gap - 3 * 70) / n) cs = (W - 2 * m - gap - 3 * 70) / n;
-    if (cs > 110) cs = 110;
-    gx = m;
-    rw = W - 2 * m - n * cs - gap;
-    bh = 62;
-    ph = 60;
-    by = H - m - bh;
-    pw = (rw - 2 * gap) / 3;
-    rows = (n + 1 + 2) / 3;
-    for (k = 0; k <= n; k++) {
-      int x = W - m - rw + (k % 3) * (pw + gap), y = gy + (k / 3) * (ph + gap);
-      if (k < n) add_btn(x, y, pw, ph, B_LETTER + k, letter_txt[k]);
-      else add_btn(x, y, pw, ph, B_ERASE, "×");
-    }
-    st_x = W - m - rw; st_w = rw;
-    st_y = gy + rows * (ph + gap) + 4; st_h = by - gap - st_y;
-    bx = st_x; bw = rw;
   }
   {
     int w3 = (bw - 2 * gap) / 3;
@@ -323,7 +302,7 @@ static void set_letters(void) {
 
 static void redraw(int full) {
   int W = ScreenWidth(), H = ScreenHeight();
-  ui_fonts((W > H) ? 26 : 28);
+  ui_fonts(28);
   if (mode == M_PLAY) {
     set_letters();
     layout(W, H);

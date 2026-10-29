@@ -1,6 +1,6 @@
 /* Square Rebuses: a Puzzle Book module for the PocketBook 625.
  * Game rules and data: rebus_core.c / rebus_data.h (port of il721/puzzles, module_rebus).
- * UI: tap a box, tap a digit. Portrait and landscape layouts. Progress in /mnt/ext1/rebus.sav. */
+ * UI: tap a box, tap a digit. Portrait layout only (the reader does not rotate). Progress in /mnt/ext1/rebus.sav. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -140,13 +140,13 @@ static void add_btn(int x, int y, int w, int h, int id, const char *label) {
 
 static const char *DIGIT_LABEL[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
-/* ---------- layout (portrait or landscape) ---------- */
+/* ---------- layout (portrait) ---------- */
 
 static int gx, gy, gw, gh; /* grid area */
 
 static void layout(int W, int H) {
-  int land = W > H, m = 8, gap = 6, i;
-  int tb = land ? 52 : 58;
+  int m = 8, gap = 6, i;
+  int tb = 58;
   nbtn = 0;
 
   /* top bar */
@@ -157,7 +157,7 @@ static void layout(int W, int H) {
   title_w = W - 2 * m - 120 - 90 - 60 - 3 * gap;
   title_y = m;
 
-  if (!land) {
+  {
     int keyh = (H > 760) ? 84 : 72, kw = (W - 2 * m - 4 * gap) / 5;
     int ky = H - m - 3 * keyh - 2 * gap;
     for (i = 0; i < 5; i++) add_btn(m + i * (kw + gap), ky, kw, keyh, 1 + i, DIGIT_LABEL[1 + i]);
@@ -171,31 +171,6 @@ static void layout(int W, int H) {
     add_btn(m + 4 * (kw + gap), ky, kw, keyh, B_NEXT, ">");
     st_x = m; st_w = W - 2 * m; st_y = H - m - 3 * keyh - 2 * gap - 44;
     gx = m; gy = tb + 4; gw = W - 2 * m; gh = st_y - gy;
-  } else {
-    /* the keypad grows for long labels (Russian "Проверить") but never past 360 px */
-    int kpw, kw, kx;
-    SetFont(ui_f_tiny, BLACK);
-    kw = 88;
-    if (StringWidth(tr(&S_CHECK)) + 14 > kw) kw = StringWidth(tr(&S_CHECK)) + 14;
-    if (StringWidth(tr(&S_DEL)) + 14 > kw) kw = StringWidth(tr(&S_DEL)) + 14;
-    kpw = 3 * kw + 2 * gap;
-    if (kpw > 360) { kpw = 360; kw = (kpw - 2 * gap) / 3; }
-    kx = W - m - kpw;
-    int keyh = (H - tb - 2 * m - 3 * gap) / 4;
-    int ky = tb + m;
-    for (i = 0; i < 9; i++)
-      add_btn(kx + (i % 3) * (kw + gap), ky + (i / 3) * (keyh + gap), kw, keyh, 1 + i, DIGIT_LABEL[1 + i]);
-    add_btn(kx, ky + 3 * (keyh + gap), kw, keyh, B_DEL, tr(&S_DEL));
-    add_btn(kx + (kw + gap), ky + 3 * (keyh + gap), kw, keyh, B_D0, "0");
-    add_btn(kx + 2 * (kw + gap), ky + 3 * (keyh + gap), kw, keyh, B_CHECK, tr(&S_CHECK));
-    {
-      int aw = (kx - m - gap - 2 * gap) / 3, ah = 62, ay = H - m - ah;
-      add_btn(m, ay, aw, ah, B_PREV, "<");
-      add_btn(m + aw + gap, ay, aw, ah, B_RESET, tr(&S_RESET));
-      add_btn(m + 2 * (aw + gap), ay, aw, ah, B_NEXT, ">");
-      st_x = m; st_w = kx - m - gap; st_y = ay - 44;
-    }
-    gx = m; gy = tb + 4; gw = kx - m - gap; gh = st_y - gy;
   }
 }
 
@@ -373,10 +348,10 @@ static void draw_help(int W, int H) {
 
 static void redraw(int full) {
   int W = ScreenWidth(), H = ScreenHeight();
-  int dsize = ((W > H) ? H : W) / 11;
+  int dsize = W / 11;
   if (dsize < 22) dsize = 22;
   ensure_digit_font(dsize);
-  ui_fonts((W > H) ? 26 : 28);
+  ui_fonts(28);
   if (mode == M_PLAY) layout(W, H);
   ClearScreen();
   if (mode == M_PLAY) draw_play(W, H);

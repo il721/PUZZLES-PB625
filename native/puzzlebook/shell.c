@@ -189,18 +189,18 @@ static void draw_help(int W, int H) {
 }
 
 /* Settings: Language (radio rows: System default, Русский, English, Deutsch) and Transfer progress (save to / load
- * from a file). Portrait stacks the two sections, landscape puts them side by side. */
+ * from a file). The two sections are stacked. */
 static void draw_settings(int W, int H) {
   static const Str *const NAME[4] = {&S_LANG_SYSTEM, &S_LANG_RU, &S_LANG_EN, &S_LANG_DE};
   static const int VALUE[4] = {LANG_SYSTEM, LANG_RU, LANG_EN, LANG_DE};
-  int land = W > H, m = 8, gap = 8, tb = 58, i, rh = land ? 72 : 62, y, x, w, hint_lines, hdr = ui_f_btn->height + 12;
+  int m = 8, gap = 8, tb = 58, i, rh = 62, y, x, w, hint_lines, hdr = ui_f_btn->height + 12;
   const char *back_t = tr(&S_BACK);
   nbtn = 0;
   add_btn(W - m - label_w(back_t, 120, 150), m, label_w(back_t, 120, 150), tb - m, H_BACK, back_t);
   ui_text_center(ui_f_title, BLACK, m, m, W - 2 * m - label_w(back_t, 120, 150) - gap, tb - m, tr(&S_SETTINGS));
   ui_draw_btn(&btns[0]);
 
-  x = m; w = land ? (W - 3 * m) / 2 : W - 2 * m;
+  x = m; w = W - 2 * m;
   SetFont(ui_f_btn, BLACK);
   DrawString(x + 8, tb + 10, tr(&S_LANGUAGE));
   y = tb + 10 + hdr;
@@ -215,12 +215,12 @@ static void draw_settings(int W, int H) {
     add_btn(x, y, w, rh, H_LANG + i, "");
   }
 
-  if (land) { x = m + w + m; y = tb + 10; } else y += 4;
+  y += 4;
   SetFont(ui_f_btn, BLACK);
   DrawString(x + 8, y, tr(&S_SYNC_SECTION));
   y += hdr;
   SetFont(ui_f_small, BLACK);
-  hint_lines = land ? 7 : 4; /* the landscape column is half as wide */
+  hint_lines = 4;
   DrawTextRect(x + 8, y, w - 16, ui_f_small->height * hint_lines, (char *)tr(&S_SYNC_HINT), ALIGN_LEFT);
   y += ui_f_small->height * hint_lines + 8;
   add_btn(x, y, w, rh, H_EXPORT, tr(&S_EXPORT));
@@ -252,7 +252,7 @@ static void draw_confirm(int W, int H) {
 
 static void redraw_home(int full) {
   int W = ScreenWidth(), H = ScreenHeight();
-  ui_fonts((W > H) ? 26 : 28);
+  ui_fonts(28);
   ClearScreen();
   if (home_mode == HM_HELP) draw_help(W, H);
   else if (home_mode == HM_SETTINGS) draw_settings(W, H);

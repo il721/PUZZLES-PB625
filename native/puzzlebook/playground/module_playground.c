@@ -56,7 +56,7 @@ static int sbx, sby, scs;
 
 static ifont *f_node, *f_mini;
 static int f_node_size;
-/* the goal picture of Eight chips (bottom left in portrait, bottom of the right column in landscape) */
+/* the goal picture of Eight chips (bottom left, the status text to its right) */
 static int gp_on, gp_x, gp_y, gp_sz;
 
 /* ---------- texts (English, Russian, German; i18n.h) ---------- */
@@ -302,7 +302,7 @@ static void add_btn(int x, int y, int w, int h, int id, const char *label) {
 static int is_graph(void) { return pg_kind(cur) == PGK_GRAPH; }
 static int is_tiles(void) { return pg_kind(cur) == PGK_TILES; }
 
-/* ---------- layout (portrait or landscape) ---------- */
+/* ---------- layout (portrait) ---------- */
 
 /* tile games: the largest board cell size and then tray cell size such that the board and the tray fit */
 static int tray_rows(int ntiles, int cols) { return (ntiles + cols - 1) / cols; }
@@ -331,7 +331,7 @@ static void layout_tiles_portrait(int ax, int ay, int aw, int ah) {
 }
 
 static void layout(int W, int H) {
-  int land = W > H, m = 8, gap = 6, tb = land ? 52 : 58;
+  int m = 8, gap = 6, tb = 58;
   int kind = pg_kind(cur), top = tb + 6;
   nbtn = 0;
   gp_on = 0;
@@ -344,7 +344,7 @@ static void layout(int W, int H) {
     board_side = pg_side(cur);
     tile_cells = cur == PG_THREE ? 3 : 2;
   }
-  if (!land) {
+  {
     int bh = 60, by = H - m - bh, w4 = (W - 2 * m - 3 * gap) / 4, ctrl_top = by, lh = ui_f_small->height;
     add_btn(m, by, w4, bh, B_PREV, "<");
     add_btn(m + w4 + gap, by, w4, bh, B_UNDO, tr(&S_UNDO));
@@ -372,84 +372,6 @@ static void layout(int W, int H) {
     st_y = ctrl_top - gap - st_h;
     bx0 = m; by0 = top; bw0 = W - 2 * m; bh0 = st_y - gap - top;
     if (kind == PGK_TILES) layout_tiles_portrait(bx0, by0, bw0, bh0);
-  } else {
-    int rowh = 50, rx, rw, ctrl_h, ncell, lh = ui_f_small->height, rh = H - top - m, cs;
-    int four = 0;
-    kind = pg_kind(cur);
-    if (kind == PGK_TILES) {
-      /* board on the left, the tray, status and buttons in the column on the right */
-      int nt = pg_ntiles(cur), tg = 4, found = 0, ts;
-      int max_ts = cur == PG_THREE ? 20 : 24, min_cs = cur == PG_THREE ? 36 : 28;
-      ncell = board_side * tile_cells;
-      for (ts = max_ts; ts >= 12 && !found; ts--) { /* the largest tray tiles first, then the largest board that leaves room for the column */
-        for (cs = (H - top - m) / ncell < 80 ? (H - top - m) / ncell : 80; cs >= (ts == 12 ? 12 : min_cs); cs--) {
-          int tile = tile_cells * ts, cols, rows, th;
-          rw = W - 2 * m - gap - ncell * cs;
-          if (rw < 200) continue;
-          cols = (rw + tg) / (tile + tg);
-          if (cols < 1) continue;
-          rows = tray_rows(nt, cols);
-          th = rows * (tile + tg) - tg;
-          if (th + gap + (lh * 4 + 6) + gap + 3 * (rowh + gap) <= rh) {
-            tcs = cs; tray_cs = ts; tray_tile = tile; tray_gap = tg; tray_cols = cols;
-            found = 1;
-            break;
-          }
-        }
-      }
-      if (!found) { tcs = 12; tray_cs = 12; tray_tile = tile_cells * 12; tray_gap = tg; tray_cols = 1; }
-      tbx = m; tby = top;
-      rx = m + ncell * tcs + gap;
-      rw = W - m - rx;
-      {
-        int rows = tray_rows(nt, tray_cols), th = rows * (tray_tile + tray_gap) - tray_gap, w2 = (rw - gap) / 2, y;
-        tray_x = rx + (rw - (tray_cols * (tray_tile + tray_gap) - tray_gap)) / 2;
-        tray_y = top;
-        ctrl_h = 3 * (rowh + gap);
-        y = H - m - ctrl_h + gap;
-        add_btn(rx, y, w2, rowh, B_ROT, tr(&S_ROTATE));
-        add_btn(rx + w2 + gap, y, rw - w2 - gap, rowh, B_TRAY, tr(&S_TOTRAY));
-        add_btn(rx, y + rowh + gap, w2, rowh, B_UNDO, tr(&S_UNDO));
-        add_btn(rx + w2 + gap, y + rowh + gap, rw - w2 - gap, rowh, B_RESET, tr(&S_RESET));
-        add_btn(rx, y + 2 * (rowh + gap), w2, rowh, B_PREV, "<");
-        add_btn(rx + w2 + gap, y + 2 * (rowh + gap), rw - w2 - gap, rowh, B_NEXT, ">");
-        st_x = rx; st_w = rw; st_y = top + th + gap; st_h = y - gap - st_y;
-        bx0 = m; by0 = top; bw0 = ncell * tcs; bh0 = ncell * tcs;
-      }
-    } else {
-      int side = kind == PGK_BLOCKS ? (H - top - m) / PG_SW_ROWS * PG_SW_ROWS : H - top - m;
-      if (kind == PGK_GRAPH && side > W - 2 * m - gap - 240) side = W - 2 * m - gap - 240;
-      bx0 = m; by0 = top; bh0 = H - top - m;
-      bw0 = kind == PGK_BLOCKS ? side / 2 : side;
-      rx = bx0 + bw0 + gap + (kind == PGK_BLOCKS ? 12 : 0);
-      rw = W - m - rx;
-      four = rw >= 420;
-      ctrl_h = four ? rowh + gap : 2 * (rowh + gap);
-      {
-        int y = H - m - ctrl_h + gap;
-        if (four) {
-          int w4 = (rw - 3 * gap) / 4;
-          add_btn(rx, y, w4, rowh, B_PREV, "<");
-          add_btn(rx + (w4 + gap), y, w4, rowh, B_UNDO, tr(&S_UNDO));
-          add_btn(rx + 2 * (w4 + gap), y, w4, rowh, B_RESET, tr(&S_RESET));
-          add_btn(rx + 3 * (w4 + gap), y, rw - 3 * (w4 + gap), rowh, B_NEXT, ">");
-        } else {
-          int w2 = (rw - gap) / 2;
-          add_btn(rx, y, w2, rowh, B_UNDO, tr(&S_UNDO));
-          add_btn(rx + w2 + gap, y, rw - w2 - gap, rowh, B_RESET, tr(&S_RESET));
-          add_btn(rx, y + rowh + gap, w2, rowh, B_PREV, "<");
-          add_btn(rx + w2 + gap, y + rowh + gap, rw - w2 - gap, rowh, B_NEXT, ">");
-        }
-        st_x = rx; st_w = rw; st_y = top; st_h = y - gap - st_y;
-        if (cur == PG_EIGHT) { /* the goal picture at the bottom of the column, the text above it */
-          gp_on = 1;
-          gp_sz = rw < 160 ? rw : 150;
-          gp_x = rx + (rw - gp_sz) / 2;
-          gp_y = y - gap - gp_sz;
-          st_h = gp_y - gap - st_y;
-        }
-      }
-    }
   }
   /* the board geometry of the current game inside (bx0, by0, bw0, bh0) */
   if (kind == PGK_GRAPH) {
@@ -473,14 +395,7 @@ static void layout(int W, int H) {
     if (scs > 60) scs = 60;
     sbx = bx0 + (bw0 - scs * PG_SW_COLS) / 2;
     sby = by0 + (bh0 - scs * PG_SW_ROWS) / 2;
-  } else {
-    int ncell = board_side * tile_cells;
-    if (land) { /* the landscape board sits at the top left */
-      tbx = bx0; tby = by0;
-    } else {
-      tbx = bx0 + (bw0 - ncell * tcs) / 2;
-    }
-  }
+  } /* tile games: layout_tiles_portrait already placed the board and the tray */
 }
 
 /* ---------- drawing: graph games ---------- */
@@ -787,7 +702,7 @@ static void draw_help(int W, int H) {
 
 static void redraw(int full) {
   int W = ScreenWidth(), H = ScreenHeight();
-  ui_fonts((W > H) ? 26 : 28);
+  ui_fonts(28);
   if (mode == M_PLAY) layout(W, H);
   ClearScreen();
   if (mode == M_PLAY) {

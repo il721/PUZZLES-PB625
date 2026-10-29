@@ -37,7 +37,7 @@ static void init(void) {
 
 static void draw(void) {
   int W = ScreenWidth(), H = ScreenHeight();
-  ui_fonts((W > H) ? 26 : 28);
+  ui_fonts(28);
   ClearScreen();
   home_btn.x = W - 98; home_btn.y = 8; home_btn.w = 90; home_btn.h = 50; home_btn.id = 1; home_btn.label = tr(&S_HOME);
   ui_draw_btn(&home_btn);

@@ -2,7 +2,7 @@
  * Game rules and data: digit_core.c / digit_data.h (port of il721/puzzles, module_digit_rebus).
  * UI: tap a cell, tap one of the digits its glyph admits. The source colours the cell borders by glyph; the
  * e-ink screen has no colour, so an empty cell shows the digits its glyph admits instead (small, grey) and the
- * pad offers only those digits. Portrait and landscape layouts. Progress in /mnt/ext1/digit.sav. */
+ * pad offers only those digits. Portrait layout only (the reader does not rotate). Progress in /mnt/ext1/digit.sav. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -165,7 +165,7 @@ static void ensure_hint_font(int size) {
   f_hint_size = size;
 }
 
-/* ---------- layout (portrait or landscape) ---------- */
+/* ---------- layout (portrait) ---------- */
 
 static void add_btn(int x, int y, int w, int h, int id, const char *label) {
   Btn *b = &btns[nbtn++];
@@ -184,8 +184,8 @@ static int add_pad_digits(int x, int y, int kw, int gap, int keyh) {
 }
 
 static void layout(int W, int H) {
-  int land = W > H, m = 8, gap = 6;
-  int tb = land ? 52 : 58;
+  int m = 8, gap = 6;
+  int tb = 58;
   nbtn = 0;
 
   add_btn(m, m, 120, tb - m, B_LIST, tr(&S_LIST));
@@ -195,7 +195,7 @@ static void layout(int W, int H) {
   title_w = W - 2 * m - 120 - 90 - 60 - 3 * gap;
   title_y = m;
 
-  if (!land) {
+  {
     int keyh = (H > 760) ? 84 : 72, kw = (W - 2 * m - 3 * gap) / 4;
     int ky = H - m - 2 * keyh - gap;
     /* pad: the admitted digits (at most three) on the left, Del on the right */
@@ -208,18 +208,6 @@ static void layout(int W, int H) {
     add_btn(m + 3 * (kw + gap), ky, kw, keyh, B_NEXT, ">");
     st_x = m; st_w = W - 2 * m; st_y = H - m - 2 * keyh - gap - 44;
     gx = m; gy = tb + 4; gw = W - 2 * m; gh = st_y - gy;
-  } else {
-    int kpw = 300, kw = (kpw - 2 * gap) / 3, kx = W - m - kpw;
-    int keyh = (H - tb - 2 * m - 2 * gap) / 3, ky = tb + m;
-    int hw = (kpw - gap) / 2, aw = (kx - m - gap - 2 * gap) / 3, ah = 62, ay = H - m - ah;
-    add_pad_digits(kx, ky, kw, gap, keyh);
-    add_btn(kx, ky + keyh + gap, hw, keyh, B_DEL, tr(&S_DEL));
-    add_btn(kx + hw + gap, ky + keyh + gap, hw, keyh, B_CHECK, tr(&S_CHECK));
-    add_btn(m, ay, aw, ah, B_PREV, "<");
-    add_btn(m + aw + gap, ay, aw, ah, B_RESET, tr(&S_RESET));
-    add_btn(m + 2 * (aw + gap), ay, aw, ah, B_NEXT, ">");
-    st_x = m; st_w = kx - m - gap; st_y = ay - 44;
-    gx = m; gy = tb + 4; gw = kx - m - gap; gh = st_y - gy;
   }
 }
 
@@ -340,10 +328,10 @@ static void draw_help(int W, int H) {
 
 static void redraw(int full) {
   int W = ScreenWidth(), H = ScreenHeight();
-  int dsize = ((W > H) ? H : W) / 11;
+  int dsize = W / 11;
   if (dsize < 22) dsize = 22;
   ensure_digit_font(dsize);
-  ui_fonts((W > H) ? 26 : 28);
+  ui_fonts(28);
   if (mode == M_PLAY) layout(W, H);
   ClearScreen();
   if (mode == M_PLAY) draw_play(W, H);

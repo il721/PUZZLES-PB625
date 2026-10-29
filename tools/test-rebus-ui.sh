@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs the Puzzle Book shell and the Square Rebuses and Digit Rebuses modules (native/puzzlebook) on the build host against tools/fake-inkview (SVG output) and plays
-# every puzzle through the on-screen buttons, portrait and landscape. Prints PASS/FAIL.
+# every puzzle through the on-screen buttons, portrait (the reader does not rotate). Prints PASS/FAIL.
 # Optional: OUT=dir keeps the SVG screenshots (and PNGs if playwright is installed).
 set -e
 cd "$(dirname "$0")/.."
@@ -71,13 +71,13 @@ def solve_script(W, H, tag):
           'tapl ?', 'expect Puzzle Book - help', 'tap 300 400', 'expect Random', 'key 27', 'expect_closed']
     return '\n'.join(L) + '\n'
 
-for W, H, tag in ((600, 800, 'portrait'), (800, 600, 'landscape')):
+for W, H, tag in ((600, 800, 'portrait'),):
     open('%s/%s.script' % (T, tag), 'w').write(solve_script(W, H, tag))
     open('%s/%s-random.script' % (T, tag), 'w').write('size %d %d\nshow\ntapl Random\nexpect Puzzle \ntapl Home\nexpect 0 / 15 solved\nquit\n' % (W, H))
 PY
 
 RC=0
-for tag in portrait landscape; do
+for tag in portrait; do
   rm -f "$T/rebus.sav"
   if REBUS_SCRIPT="$T/$tag-random.script" "$T/ui"; then echo "PASS random $tag"; else echo "FAIL random $tag"; RC=1; fi
   rm -f "$T/rebus.sav"
@@ -108,7 +108,7 @@ EOS
 rm -f "$T/rebus.sav"
 if REBUS_SCRIPT="$T/two.script" "$T/ui2"; then echo "PASS two modules"; else echo "FAIL two modules"; RC=1; fi
 
-# ---- Digit Rebuses (second real module, real registry): solve all 19 puzzles through the buttons, portrait and landscape
+# ---- Digit Rebuses (second real module, real registry): solve all 19 puzzles through the buttons, portrait (the reader does not rotate)
 python3 - "$T" "$OUT" <<'PY'
 import json, sys
 T, OUT = sys.argv[1:3]
@@ -162,10 +162,10 @@ def script(W, H, tag):
           'tapl Random', 'expect Home', 'key 26', 'expect 18 / 18 solved', 'key 27', 'expect_closed']
     return '\n'.join(L) + '\n'
 
-for W, H, tag in ((600, 800, 'portrait'), (800, 600, 'landscape')):
+for W, H, tag in ((600, 800, 'portrait'),):
     open('%s/digit-%s.script' % (T, tag), 'w').write(script(W, H, tag))
 PY
-for tag in portrait landscape; do
+for tag in portrait; do
   rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/cfg" "$T/global.cfg"
   if REBUS_SCRIPT="$T/digit-$tag.script" "$T/ui3"; then echo "PASS digit rebuses $tag"; else echo "FAIL digit rebuses $tag"; RC=1; fi
 done
@@ -189,7 +189,7 @@ PY
 done
 rm -f "$T/cfg" "$T/digit.sav"
 
-# ---- Domino Solitaire (third real module, real registry): solve all 19 puzzles by tapping cells, portrait and landscape
+# ---- Domino Solitaire (third real module, real registry): solve all 19 puzzles by tapping cells, portrait (the reader does not rotate)
 python3 - "$T" "$OUT" <<'PY'
 import json, sys
 T, OUT = sys.argv[1:3]
@@ -249,10 +249,10 @@ def script(W, H, tag):
           'tapl Domino Solitaire', 'tapl Home', 'expect 18 / 18 solved', 'key 27', 'expect_closed']
     return '\n'.join(L) + '\n'
 
-for W, H, tag in ((600, 800, 'portrait'), (800, 600, 'landscape')):
+for W, H, tag in ((600, 800, 'portrait'),):
     open('%s/domino-%s.script' % (T, tag), 'w').write(script(W, H, tag))
 PY
-for tag in portrait landscape; do
+for tag in portrait; do
   rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/cfg" "$T/global.cfg"
   if REBUS_SCRIPT="$T/domino-$tag.script" "$T/ui3"; then echo "PASS domino solitaire $tag"; else echo "FAIL domino solitaire $tag"; RC=1; fi
 done
@@ -311,7 +311,7 @@ PY
 done
 rm -f "$T/cfg" "$T/domino.sav" "$T/labyrinth.sav"
 
-# ---- Alphabet Labyrinth (fourth real module, real registry): solve all 19 puzzles by tapping cells, portrait and landscape
+# ---- Alphabet Labyrinth (fourth real module, real registry): solve all 19 puzzles by tapping cells, portrait (the reader does not rotate)
 python3 - "$T" "$OUT" <<'PY'
 import json, sys
 T, OUT = sys.argv[1:3]
@@ -364,11 +364,11 @@ def script(W, H, tag):
           'tapl Alphabet Labyrinth', 'tapl Home', 'expect 18 / 18 solved', 'key 27', 'expect_closed']
     return '\n'.join(L) + '\n'
 
-for W, H, tag in ((600, 800, 'portrait'), (800, 600, 'landscape')):
+for W, H, tag in ((600, 800, 'portrait'),):
     open('%s/lab-%s.script' % (T, tag), 'w').write(script(W, H, tag))
 json.dump({'sol': SOL, 'taps': TAPS}, open(T + '/lab-solutions.json', 'w'))
 PY
-for tag in portrait landscape; do
+for tag in portrait; do
   rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/cfg" "$T/global.cfg"
   if REBUS_SCRIPT="$T/lab-$tag.script" "$T/ui3"; then echo "PASS alphabet labyrinth $tag"; else echo "FAIL alphabet labyrinth $tag"; RC=1; fi
 done
@@ -552,7 +552,7 @@ print('PASS labyrinth merged save file')
 PY
 rm -f "$T/labyrinth.sav" "$P"
 
-# ---- Squarewords (fifth real module, real registry): solve all 18 puzzles with cell + letter taps, portrait and landscape
+# ---- Squarewords (fifth real module, real registry): solve all 18 puzzles with cell + letter taps, portrait (the reader does not rotate)
 python3 - "$T" "$OUT" <<'PY'
 import json, sys
 T, OUT = sys.argv[1:3]
@@ -628,10 +628,10 @@ def script(W, H, tag):
           'tapl Squarewords', 'tapl Home', 'expect 17 / 17 solved', 'key 27', 'expect_closed']
     return '\n'.join(L) + '\n'
 
-for W, H, tag in ((600, 800, 'portrait'), (800, 600, 'landscape')):
+for W, H, tag in ((600, 800, 'portrait'),):
     open('%s/squareword-%s.script' % (T, tag), 'w').write(script(W, H, tag))
 PY
-for tag in portrait landscape; do
+for tag in portrait; do
   rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav" "$T/keyword.sav" "$T/cfg" "$T/global.cfg"
   if REBUS_SCRIPT="$T/squareword-$tag.script" "$T/ui3"; then echo "PASS squarewords $tag"; else echo "FAIL squarewords $tag"; RC=1; fi
 done
@@ -762,7 +762,7 @@ print('PASS squarewords merged save file')
 PY
 rm -f "$T/squareword.sav" "$P"
 
-# ---- Keyword Rebuses (sixth real module, real registry): solve all 18 puzzles with letter + digit taps, portrait and landscape
+# ---- Keyword Rebuses (sixth real module, real registry): solve all 18 puzzles with letter + digit taps, portrait (the reader does not rotate)
 python3 - "$T" "$OUT" <<'PY'
 import json, sys
 T, OUT = sys.argv[1:3]
@@ -812,10 +812,10 @@ def script(W, H, tag):
           'tapl Keyword Rebuses', 'tapl Home', 'expect 17 / 17 solved', 'key 27', 'expect_closed']
     return '\n'.join(L) + '\n'
 
-for W, H, tag in ((600, 800, 'portrait'), (800, 600, 'landscape')):
+for W, H, tag in ((600, 800, 'portrait'),):
     open('%s/keyword-%s.script' % (T, tag), 'w').write(script(W, H, tag))
 PY
-for tag in portrait landscape; do
+for tag in portrait; do
   rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav" "$T/keyword.sav" "$T/cfg" "$T/global.cfg"
   if REBUS_SCRIPT="$T/keyword-$tag.script" "$T/ui3"; then echo "PASS keyword rebuses $tag"; else echo "FAIL keyword rebuses $tag"; RC=1; fi
 done
@@ -974,7 +974,7 @@ rm -f "$T/keyword.sav" "$P"
 # landscape; undo / reset / rules, the tile games and the swap blocks, a restart, ru / de, and the progress transfer (portrait)
 PG=tools/test-playground-gen.py
 run_pg() { if REBUS_SCRIPT="$T/$2" "$T/ui3"; then echo "PASS puzzle games $1"; else echo "FAIL puzzle games $1"; RC=1; fi; }
-for pair in 'portrait 600 800' 'landscape 800 600'; do
+for pair in 'portrait 600 800'; do
   set -- $pair; tag=$1; PW=$2; PH=$3
   rm -f "$T"/*.sav "$T/log.txt" "$T/cfg" "$T/global.cfg"
   python3 $PG "$T" "$OUT" $tag $PW $PH geom
@@ -1045,8 +1045,8 @@ PY
 done
 rm -f "$T"/*.sav "$T/cfg" "$T/log.txt"
 
-# ---- the home screen shows every game at once (no paging), portrait and landscape
-for sz in '600 800' '800 600'; do
+# ---- the home screen shows every game at once (no paging), portrait (the reader does not rotate)
+for sz in '600 800'; do
   rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav" "$T/keyword.sav" "$T/cfg" "$T/global.cfg"
   printf 'size %s\nshow\nexpect Square Rebuses\nexpect Digit Rebuses\nexpect Domino Solitaire\nexpect Alphabet Labyrinth\nexpect Squarewords\nexpect Keyword Rebuses\nexpect Puzzle games\nexpect Settings\nexpect_not &gt;\nquit\n' "$sz" > "$T/home-all.script"
   if REBUS_SCRIPT="$T/home-all.script" "$T/ui3"; then echo "PASS home shows all games ($sz)"; else echo "FAIL home shows all games ($sz)"; RC=1; fi
@@ -1182,11 +1182,11 @@ for case in none garbage array nobundle newer; do
   printf 'size 600 800\nshow\ntapl Settings\ntapl Load progress from a file\nexpect %s\nexpect Transfer progress\nquit\n' "$EXP" > "$T/prog-bad.script"
   if REBUS_SCRIPT="$T/prog-bad.script" "$T/ui3"; then echo "PASS progress file $case"; else echo "FAIL progress file $case"; RC=1; fi
 done
-# Russian and German texts of the section, and the landscape layout
+# Russian and German texts of the section
 for lg in ru de; do
   printf 'lang=%s\n' $lg > "$T/cfg"
   if [ $lg = ru ]; then EXPS="Перенос прогресса"; EXPE="Прогресс сохранён."; BK="Назад"; else EXPS="Fortschritt übertragen"; EXPE="Fortschritt gespeichert."; BK="Zurück"; fi
-  for sz in "600 800 portrait" "800 600 landscape"; do
+  for sz in "600 800 portrait"; do
     set -- $sz
     printf 'size %s %s\nshow\ntap 40 760\n' $1 $2 > "$T/prog-$lg.script"
     printf 'tapl %s\nexpect %s\nsvg %s/%s-settings-sync-%s.svg\nquit\n' "$( [ $lg = ru ] && echo Настройки || echo Einstellungen )" "$EXPS" "$OUT" $3 $lg >> "$T/prog-$lg.script"
@@ -1198,8 +1198,8 @@ rm -f "$T/cfg" "$P" "$T/export.json" "$T/rebus.sav" "$T/digit.sav"
 
 # ---- languages and the Settings screen: Russian and German walk-throughs, "system" follows the reader's global.cfg,
 # the choice is saved to the cfg file and read back by the next start
-for tag in portrait landscape; do
-  if [ $tag = portrait ]; then SZ="600 800"; else SZ="800 600"; fi
+for tag in portrait; do
+  SZ="600 800"
   rm -f "$T/cfg" "$T/global.cfg" "$T/rebus.sav"
   cat > "$T/lang-$tag.script" <<EOS
 size $SZ
@@ -1290,7 +1290,7 @@ printf 'lang=ru\\n' > "$T/cfg"
 printf 'size 600 800\\nshow\\ntapl Ребусы с квадратиками\\ntapl Список\\nexpect Выберите ребус\\ntapl Домой\\nexpect Головоломки\\nexpect решено\\nquit\\n' > "$T/list-ru.script"
 if REBUS_SCRIPT="$T/list-ru.script" "$T/ui"; then echo "PASS list Home ru"; else echo "FAIL list Home ru"; RC=1; fi
 printf 'lang=de\\n' > "$T/cfg"
-printf 'size 800 600\\nshow\\ntapl Zahlenrätsel-Quadrate\\ntapl Liste\\nexpect Rätsel wählen\\ntapl Start\\nexpect Rätselbuch\\nexpect gelöst\\nquit\\n' > "$T/list-de.script"
+printf 'size 600 800\\nshow\\ntapl Zahlenrätsel-Quadrate\\ntapl Liste\\nexpect Rätsel wählen\\ntapl Start\\nexpect Rätselbuch\\nexpect gelöst\\nquit\\n' > "$T/list-de.script"
 if REBUS_SCRIPT="$T/list-de.script" "$T/ui"; then echo "PASS list Home de"; else echo "FAIL list Home de"; RC=1; fi
 
 # system default follows the reader's language (language=ru in global.cfg); an unknown one falls back to English

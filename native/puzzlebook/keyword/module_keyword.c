@@ -4,7 +4,7 @@
  * its digit once it has one) and the keyword strip (slots 0..9: the letter that holds each digit), then the digit pad.
  * Tap a letter (grid, bank, or a strip slot), then a digit; Del removes the digit of the selected letter. A digit on
  * two letters turns both black, a word of 2+ letters starting with 0 turns its first letter black, a failing equation
- * (all letters set) turns its signs black. Portrait and landscape layouts. Progress in /mnt/ext1/keyword.sav. */
+ * (all letters set) turns its signs black. Portrait layout only (the reader does not rotate). Progress in /mnt/ext1/keyword.sav. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -150,7 +150,7 @@ static void ensure_fonts(FontPair *fp, int size) {
   fp->size = size;
 }
 
-/* ---------- layout (portrait or landscape) ---------- */
+/* ---------- layout (portrait) ---------- */
 
 static void add_btn(int x, int y, int w, int h, int id, const char *label) {
   Btn *b = &btns[nbtn++];
@@ -189,8 +189,8 @@ static void grid_place(int x, int y, int availW, int availH) {
 }
 
 static void layout(int W, int H) {
-  int land = W > H, m = 8, gap = 6, k;
-  int tb = land ? 52 : 58;
+  int m = 8, gap = 6, k;
+  int tb = 58;
   int by, bh, bx, bw, ph, pw;
   nbtn = 0;
 
@@ -200,7 +200,7 @@ static void layout(int W, int H) {
   title_x = m + 120 + gap;
   title_w = W - 2 * m - 120 - 90 - 60 - 3 * gap;
 
-  if (!land) {
+  {
     /* bottom up: the < Reset > row, the two digit rows (0..5, 6..9 + Del), the strip, the bank, the status; the cross in what is left */
     int top = tb + 6, stat_h = 76, availH;
     bh = 64;
@@ -224,32 +224,6 @@ static void layout(int W, int H) {
     availH = st_y - 4 - top;
     grid_size(W - 2 * m, availH, 90);
     grid_place(m, top, W - 2 * m, availH);
-  } else {
-    /* the cross, bank and strip on the left, then the status; on the right the digit pad (4 x 3) and the buttons */
-    int rw = 268, lw = W - 2 * m - gap - rw, rx = W - m - rw, top = tb + 6, rows = 3, row_h, availH;
-    bh = 62;
-    by = H - m - bh;
-    ts = (lw - 9 * 2) / 10;
-    if (ts > 56) ts = 56;
-    pw = (rw - 3 * gap) / 4;
-    row_h = (by - gap - top - (rows - 1) * gap) / rows;
-    if (row_h > 92) row_h = 92;
-    for (k = 0; k < 11; k++) {
-      int x = rx + (k % 4) * (pw + gap), y = top + (k / 4) * (row_h + gap);
-      if (k < 10) add_btn(x, y, pw, row_h, B_DIG + k, digit_txt[k]);
-      else add_btn(x, y, pw * 2 + gap, row_h, B_DEL, tr(&S_DEL));
-    }
-    bx = rx; bw = rw;
-    availH = H - top - m - 2 * (ts + 8) - 90;
-    grid_size(lw, availH, 70);
-    {
-      int gh = 3 * gt + 2 * lane;
-      grid_place(m, top, lw, gh);
-      bank_x = m + (lw - (10 * ts + 9 * 2)) / 2;
-      bank_y = top + gh + 12;
-      strip_y = bank_y + ts + 8;
-      st_x = m; st_w = lw; st_y = strip_y + ts + 8; st_h = H - m - st_y;
-    }
   }
   for (k = 0; k < KW_LETTERS; k++) add_btn(bank_x + k * (ts + 2), bank_y, ts, ts, B_LET + k, letter_txt[k]);
   for (k = 0; k < 10; k++) add_btn(bank_x + k * (ts + 2), strip_y, ts, ts, B_SLOT + k, digit_txt[k]);
@@ -424,7 +398,7 @@ static void set_letters(void) {
 
 static void redraw(int full) {
   int W = ScreenWidth(), H = ScreenHeight();
-  ui_fonts((W > H) ? 26 : 28);
+  ui_fonts(28);
   if (mode == M_PLAY) {
     set_letters();
     layout(W, H);

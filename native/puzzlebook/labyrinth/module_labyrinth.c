@@ -172,7 +172,7 @@ static void ensure_chip_font(int size) {
   f_chip_size = size;
 }
 
-/* ---------- layout (portrait or landscape) ---------- */
+/* ---------- layout (portrait) ---------- */
 
 static void add_btn(int x, int y, int w, int h, int id, const char *label) {
   Btn *b = &btns[nbtn++];
@@ -180,8 +180,8 @@ static void add_btn(int x, int y, int w, int h, int id, const char *label) {
 }
 
 static void layout(int W, int H) {
-  int land = W > H, m = 8, gap = 6;
-  int tb = land ? 52 : 54;
+  int m = 8, gap = 6;
+  int tb = 54;
   nbtn = 0;
 
   add_btn(m, m, 120, tb - m, B_LIST, tr(&S_LIST));
@@ -192,7 +192,7 @@ static void layout(int W, int H) {
 
   chip_gap = 3;
   gy = tb + 2;
-  if (!land) {
+  {
     /* grid on top; below it the alphabet (3 rows of 11), the status and one row of four buttons */
     int bh = 60, by, trk_h, w4 = (W - 2 * m - 3 * gap) / 4;
     chip_cols = 11;
@@ -210,25 +210,6 @@ static void layout(int W, int H) {
     add_btn(m + (w4 + gap), by, w4, bh, B_PREV, "<");
     add_btn(m + 2 * (w4 + gap), by, w4, bh, B_RESET, tr(&S_RESET));
     add_btn(m + 3 * (w4 + gap), by, w4, bh, B_NEXT, ">");
-  } else {
-    /* grid on the left; on the right the alphabet (6 columns), the status and two rows of two buttons */
-    int rw, bh = 52, by, w2, trk_h;
-    cs = (H - gy - m) / 8;
-    if ((W - 2 * m - gap - 240) / 8 < cs) cs = (W - 2 * m - gap - 240) / 8;
-    gx = m;
-    rw = W - 2 * m - 8 * cs - gap;
-    chip_x = W - m - rw; chip_y = gy;
-    chip_cols = 6;
-    chip_w = (rw - (chip_cols - 1) * chip_gap) / chip_cols;
-    chip_h = 34;
-    trk_h = 6 * chip_h + 5 * chip_gap;
-    by = H - m - 2 * bh - gap;
-    st_x = chip_x; st_w = rw; st_y = chip_y + trk_h + gap; st_h = by - gap - st_y;
-    w2 = (rw - gap) / 2;
-    add_btn(chip_x, by, w2, bh, B_CROSS, tr(&S_CROSS));
-    add_btn(chip_x + w2 + gap, by, w2, bh, B_RESET, tr(&S_RESET));
-    add_btn(chip_x, by + bh + gap, w2, bh, B_PREV, "<");
-    add_btn(chip_x + w2 + gap, by + bh + gap, w2, bh, B_NEXT, ">");
   }
 }
 
@@ -373,7 +354,7 @@ static void draw_help(int W, int H) {
 
 static void redraw(int full) {
   int W = ScreenWidth(), H = ScreenHeight();
-  ui_fonts((W > H) ? 26 : 28);
+  ui_fonts(28);
   if (mode == M_PLAY) {
     layout(W, H);
     ensure_letter_font(cs * 50 / 100 > 18 ? cs * 50 / 100 : 18);

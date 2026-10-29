@@ -143,7 +143,7 @@ static void ensure_chip_font(int size) {
   f_chip_size = size;
 }
 
-/* ---------- layout (portrait or landscape) ---------- */
+/* ---------- layout (portrait) ---------- */
 
 static void add_btn(int x, int y, int w, int h, int id, const char *label) {
   Btn *b = &btns[nbtn++];
@@ -151,8 +151,8 @@ static void add_btn(int x, int y, int w, int h, int id, const char *label) {
 }
 
 static void layout(int W, int H) {
-  int land = W > H, m = 8, gap = 6;
-  int tb = land ? 52 : 58;
+  int m = 8, gap = 6;
+  int tb = 58;
   int by, bh, bx, bw, area;
   nbtn = 0;
 
@@ -164,7 +164,7 @@ static void layout(int W, int H) {
 
   chip_gap = 4;
   gy = tb + 4;
-  if (!land) {
+  {
     /* grid on the left, the 28 pairs in two columns on the right (as tall as the grid), status and buttons below */
     int pw;
     chip_cols = 2;
@@ -182,23 +182,6 @@ static void layout(int W, int H) {
     st_x = m; st_w = W - 2 * m;
     st_y = gy + 8 * cs + 6; st_h = by - gap - st_y;
     bx = m; bw = W - 2 * m;
-  } else {
-    /* grid on the left; on the right the 28 pairs in four columns, the status and the buttons */
-    int rw;
-    cs = (W - 2 * m - gap - 300) / 7;
-    if ((H - gy - m) / 8 < cs) cs = (H - gy - m) / 8;
-    gx = m;
-    rw = W - 2 * m - 7 * cs - gap;
-    chip_x = W - m - rw;
-    chip_y = gy;
-    chip_cols = 4;
-    chip_w = (rw - 3 * chip_gap) / 4;
-    chip_h = 36;
-    bh = 62;
-    by = H - m - bh;
-    st_x = chip_x; st_w = rw;
-    st_y = chip_y + 7 * chip_h + 6 * chip_gap + 8; st_h = by - gap - st_y;
-    bx = chip_x; bw = rw;
   }
   {
     int w3 = (bw - 2 * gap) / 3;
@@ -305,7 +288,7 @@ static void draw_help(int W, int H) {
 
 static void redraw(int full) {
   int W = ScreenWidth(), H = ScreenHeight();
-  ui_fonts((W > H) ? 26 : 28);
+  ui_fonts(28);
   if (mode == M_PLAY) {
     layout(W, H);
     ensure_digit_font(cs * 55 / 100 > 18 ? cs * 55 / 100 : 18);
