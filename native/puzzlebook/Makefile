@@ -9,7 +9,7 @@ OUT = ../../reader/Puzzle Book.app
 CFLAGS = -O2 -Wall -Wextra -std=gnu99
 
 SHELLSRC = shell.c ui.c i18n.c modules.c
-MODSRC   = rebus/module_rebus.c rebus/rebus_core.c
+MODSRC   = rebus/module_rebus.c rebus/rebus_core.c digit/module_digit.c digit/digit_core.c
 
 all:
 	$(CC) $(CFLAGS) $(SHELLSRC) $(MODSRC) -o "$(OUT)" -linkview
@@ -18,7 +18,11 @@ all:
 rebus/rebus_data.h: rebus/module01.json ../../tools/gen-rebus-data.py
 	python3 ../../tools/gen-rebus-data.py
 
-test: rebus/test_core.c rebus/rebus_core.c rebus/rebus_core.h rebus/rebus_data.h
+digit/digit_data.h: digit/module02.json ../../tools/gen-digit-data.py
+	python3 ../../tools/gen-digit-data.py
+
+test: rebus/test_core.c rebus/rebus_core.c rebus/rebus_core.h rebus/rebus_data.h digit/test_core.c digit/digit_core.c digit/digit_core.h digit/digit_data.h
 	gcc -Wall -Wextra -o /tmp/rebus_test rebus/test_core.c rebus/rebus_core.c && /tmp/rebus_test
+	gcc -Wall -Wextra -o /tmp/digit_test digit/test_core.c digit/digit_core.c && /tmp/digit_test
 
 .PHONY: all test

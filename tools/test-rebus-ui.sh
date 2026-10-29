@@ -1,5 +1,5 @@
 #!/bin/sh
-# Runs the Puzzle Book shell and the Square Rebuses module (native/puzzlebook) on the build host against tools/fake-inkview (SVG output) and plays
+# Runs the Puzzle Book shell and the Square Rebuses and Digit Rebuses modules (native/puzzlebook) on the build host against tools/fake-inkview (SVG output) and plays
 # every puzzle through the on-screen buttons, portrait and landscape. Prints PASS/FAIL.
 # Optional: OUT=dir keeps the SVG screenshots (and PNGs if playwright is installed).
 set -e
@@ -9,7 +9,7 @@ OUT=${OUT:-$T}
 mkdir -p "$OUT"
 N=native/puzzlebook
 gcc -Wall -Wextra -std=gnu99 -Itools/fake-inkview -c tools/fake-inkview/inkview_svg.c -o "$T/shim.o"
-for f in $N/shell.c $N/ui.c $N/i18n.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c; do
+for f in $N/shell.c $N/ui.c $N/i18n.c tools/test-modules1.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c; do
   gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" \
     -Itools/fake-inkview -I$N -I$N/rebus -c $f -o "$T/$(basename $f .c).o"
 done
@@ -23,6 +23,14 @@ for f in $N/shell.c $N/ui.c $N/i18n.c tools/test-modules2.c $N/rebus/module_rebu
     -Itools/fake-inkview -I$N -I$N/rebus -c $f -o "$T2/$(basename $f .c).o"
 done
 gcc "$T/shim.o" "$T2"/*.o -o "$T/ui2"
+
+# third variant: the real registry (modules.c): Square Rebuses + Digit Rebuses
+T3="$T/full"; mkdir -p "$T3"
+for f in $N/shell.c $N/ui.c $N/i18n.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/digit/module_digit.c $N/digit/digit_core.c; do
+  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DDIGITSAVEF="\"$T/digit.sav\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" \
+    -Itools/fake-inkview -I$N -I$N/rebus -I$N/digit -c $f -o "$T3/$(basename $f .c).o"
+done
+gcc "$T/shim.o" "$T3"/*.o -o "$T/ui3"
 
 python3 - "$T" "$OUT" <<'PY'
 import json, sys
@@ -99,6 +107,87 @@ expect_closed
 EOS
 rm -f "$T/rebus.sav"
 if REBUS_SCRIPT="$T/two.script" "$T/ui2"; then echo "PASS two modules"; else echo "FAIL two modules"; RC=1; fi
+
+# ---- Digit Rebuses (second real module, real registry): solve all 19 puzzles through the buttons, portrait and landscape
+python3 - "$T" "$OUT" <<'PY'
+import json, sys
+T, OUT = sys.argv[1:3]
+data = json.load(open('native/puzzlebook/digit/module02.json'))['puzzles']
+SETS = {'G1': (0, 8, 9), 'G2': (0, 6, 8), 'G3': (1, 4, 7), 'G4': (2, 3), 'G5': (3, 5, 9)}
+
+def line_ok(cells, ops):
+    acc = cells[0]
+    for i, op in enumerate(ops):
+        n = cells[i + 1]
+        if op == '+': acc += n
+        elif op == '-':
+            acc -= n
+            if acc < 0: return False
+        elif op == '*': acc *= n
+        else:
+            if n == 0 or acc % n: return False
+            acc //= n
+    return acc == cells[3]
+
+def broken(p, g):
+    return any(not line_ok(g[r], p['rowOps'][r]) for r in range(4)) or \
+           any(not line_ok([g[r][c] for r in range(4)], p['colOps'][c]) for c in range(4))
+
+def script(W, H, tag):
+    L = ['size %d %d' % (W, H), 'show', 'expect 0 / 18 solved', 'svg %s/%s-full-home.svg' % (OUT, tag),
+         'tapl Digit Rebuses', 'expect Puzzle 1/18', 'svg %s/%s-digit-start.svg' % (OUT, tag)]
+    order = list(range(1, len(data))) + [0]
+    for n, i in enumerate(order):
+        p = data[i]
+        for r in range(4):
+            for c in range(4):
+                L.append('tapl %d' % p['answer'][r][c])
+        L.append('expect Solved!')
+        if i == 4: L.append('svg %s/%s-digit-solved.svg' % (OUT, tag))
+        if n < len(order) - 1: L.append('tapl >')
+    # mistakes on the Example: the lowest admitted digit everywhere breaks a rule; Check blackens it
+    p = data[0]
+    low = [[min(SETS[p['glyphs'][r][c]]) for c in range(4)] for r in range(4)]
+    assert broken(p, low)
+    L += ['tapl Reset', 'expect Tap Reset again', 'tapl Reset']
+    for r in range(4):
+        for c in range(4):
+            L.append('tapl %d' % low[r][c])
+    L += ['expect Tap Check', 'tapl Check', 'expect broken', 'svg %s/%s-digit-errors.svg' % (OUT, tag),
+          'tapl Reset', 'tapl Reset', 'tapl Check', 'expect No mistakes',
+          'tapl List', 'expect Digit Rebuses - choose a puzzle', 'svg %s/%s-digit-list.svg' % (OUT, tag), 'tapl Back',
+          'tapl ?', 'expect How to play', 'svg %s/%s-digit-help.svg' % (OUT, tag), 'key 27', 'expect Example',
+          # Home key and the list's Home button lead to the shell; counts there
+          'key 23', 'expect 18 / 18 solved', 'expect 0 / 15 solved', 'tapl Digit Rebuses', 'tapl List', 'tapl Home', 'expect 18 / 18 solved',
+          'tapl Random', 'expect Puzzle ', 'key 26', 'expect 18 / 18 solved', 'key 27', 'expect_closed']
+    return '\n'.join(L) + '\n'
+
+for W, H, tag in ((600, 800, 'portrait'), (800, 600, 'landscape')):
+    open('%s/digit-%s.script' % (T, tag), 'w').write(script(W, H, tag))
+PY
+for tag in portrait landscape; do
+  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/cfg" "$T/global.cfg"
+  if REBUS_SCRIPT="$T/digit-$tag.script" "$T/ui3"; then echo "PASS digit rebuses $tag"; else echo "FAIL digit rebuses $tag"; RC=1; fi
+done
+grep -c '^1 ' "$T/digit.sav" | sed 's/^/digit puzzles saved solved: /'
+# Digit Rebuses in Russian and German (cells, pad, messages, list, help)
+for lg in ru de; do
+  rm -f "$T/digit.sav" "$T/rebus.sav"; printf 'lang=%s\n' $lg > "$T/cfg"
+  if [ $lg = ru ]; then TILE="Цифровые ребусы"; T1="Ребус 1/18"; CH="Проверить"; OKM="Ошибок нет"; LS="Выберите ребус"; HP="Как играть"; HM="Домой"; SOL="Решено!"; LST="Список"; else TILE="Ziffernrebusse"; T1="Rätsel 1/18"; CH="Prüfen"; OKM="Keine Fehler"; LS="Rätsel wählen"; HP="Spielregeln"; HM="Start"; SOL="Gelöst!"; LST="Liste"; fi
+  python3 - "$T" "$lg" "$TILE" "$T1" "$CH" "$OKM" "$LS" "$HP" "$HM" "$SOL" "$LST" <<'PY'
+import json, sys
+T, lg, TILE, T1, CH, OKM, LS, HP, HM, SOL, LST = sys.argv[1:]
+p = json.load(open('native/puzzlebook/digit/module02.json'))['puzzles'][1]
+L = ['size 600 800', 'show', 'tapl ' + TILE, 'expect ' + T1, 'tapl ' + CH, 'expect ' + OKM, 'tapl ?', 'expect ' + HP, 'tap 300 400',
+     'tapl ' + LST, 'expect ' + LS, 'tapl ' + HM, 'expect ' + TILE, 'tapl ' + TILE]
+for r in range(4):
+    for c in range(4): L.append('tapl %d' % p['answer'][r][c])
+L += ['expect ' + SOL, 'quit']
+open('%s/digit-%s.script' % (T, lg), 'w').write('\n'.join(L) + '\n')
+PY
+  if REBUS_SCRIPT="$T/digit-$lg.script" "$T/ui3"; then echo "PASS digit rebuses $lg"; else echo "FAIL digit rebuses $lg"; RC=1; fi
+done
+rm -f "$T/cfg" "$T/digit.sav"
 
 # ---- languages and the Settings screen: Russian and German walk-throughs, "system" follows the reader's global.cfg,
 # the choice is saved to the cfg file and read back by the next start
