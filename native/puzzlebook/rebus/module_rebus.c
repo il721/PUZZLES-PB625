@@ -25,7 +25,7 @@ static int cur, mode = M_PLAY;
 static int selr = -1, sels = -1, selk = -1;
 static Marks marks;
 static int have_marks, reset_armed, updates;
-static char msg[96];
+static char msg[200];
 static int left; /* set when the module handed control back to the shell */
 
 static Btn btns[32];
@@ -37,6 +37,30 @@ static int st_x, st_y, st_w;          /* status line */
 
 static ifont *f_digit;
 static int f_digit_size;
+
+/* ---------- texts (English, Russian, German; i18n.h) ---------- */
+
+static const Str S_LIST = S("List", "Список", "Liste");
+static const Str S_HOME = S("Home", "Домой", "Start");
+static const Str S_CHECK = S("Check", "Проверить", "Prüfen");
+static const Str S_DEL = S("Del", "Стереть", "Löschen");
+static const Str S_RESET = S("Reset", "Сбросить", "Reset");
+static const Str S_BACK = S("Back", "Назад", "Zurück");
+static const Str S_EXAMPLE = S("Example  (1/%d)", "Пример  (1/%d)", "Beispiel  (1/%d)");
+static const Str S_PUZZLE = S("Puzzle %d/%d%s", "Ребус %d/%d%s", "Rätsel %d/%d%s");
+static const Str S_EX_SHORT = S("Ex", "Пр", "Bsp");
+static const Str S_LIST_TITLE = S("Square Rebuses - choose a puzzle", "Выберите ребус", "Rätsel wählen");
+static const Str S_HELP_TITLE = S("How to play", "Как играть", "Spielregeln");
+static const Str S_SOLVED_BEFORE = S("Solved before. Edit freely or press Reset.", "Уже решён. Меняйте или нажмите «Сбросить».",
+                                     "Schon gelöst. Frei ändern oder „Reset“ tippen.");
+static const Str S_SOLVED_NEXT = S("Solved! Press > for the next puzzle.", "Решено! Нажмите >, чтобы перейти к следующему ребусу.",
+                                   "Gelöst! Mit > geht es zum nächsten Rätsel.");
+static const Str S_BROKEN = S("%d rule(s) broken: black boxes.", "Нарушено правил: %d (чёрные клетки).",
+                              "Verletzte Regeln: %d (schwarze Felder).");
+static const Str S_NO_MISTAKES = S("No mistakes so far, %d box(es) empty.", "Ошибок нет, пустых клеток: %d.",
+                                   "Keine Fehler, leere Felder: %d.");
+static const Str S_RESET_AGAIN = S("Tap Reset again to clear the grid.", "Нажмите «Сбросить» ещё раз, чтобы очистить квадрат.",
+                                   "Noch einmal „Reset“ tippen, um das Quadrat zu leeren.");
 
 /* ---------- persistence ---------- */
 
@@ -123,8 +147,8 @@ static void layout(int W, int H) {
   nbtn = 0;
 
   /* top bar */
-  add_btn(m, m, 120, tb - m, B_LIST, "List");
-  add_btn(W - m - 90, m, 90, tb - m, B_HOME, "Home");
+  add_btn(m, m, 120, tb - m, B_LIST, tr(&S_LIST));
+  add_btn(W - m - 90, m, 90, tb - m, B_HOME, tr(&S_HOME));
   add_btn(W - m - 90 - gap - 60, m, 60, tb - m, B_HELP, "?");
   title_x = m + 120 + gap;
   title_w = W - 2 * m - 120 - 90 - 60 - 3 * gap;
@@ -138,25 +162,33 @@ static void layout(int W, int H) {
     add_btn(m + 4 * (kw + gap), ky + keyh + gap, kw, keyh, B_D0, "0");
     ky += 2 * (keyh + gap);
     add_btn(m, ky, kw, keyh, B_PREV, "<");
-    add_btn(m + (kw + gap), ky, kw, keyh, B_CHECK, "Check");
-    add_btn(m + 2 * (kw + gap), ky, kw, keyh, B_DEL, "Del");
-    add_btn(m + 3 * (kw + gap), ky, kw, keyh, B_RESET, "Reset");
+    add_btn(m + (kw + gap), ky, kw, keyh, B_CHECK, tr(&S_CHECK));
+    add_btn(m + 2 * (kw + gap), ky, kw, keyh, B_DEL, tr(&S_DEL));
+    add_btn(m + 3 * (kw + gap), ky, kw, keyh, B_RESET, tr(&S_RESET));
     add_btn(m + 4 * (kw + gap), ky, kw, keyh, B_NEXT, ">");
     st_x = m; st_w = W - 2 * m; st_y = H - m - 3 * keyh - 2 * gap - 44;
     gx = m; gy = tb + 4; gw = W - 2 * m; gh = st_y - gy;
   } else {
-    int kpw = 276, kw = (kpw - 2 * gap) / 3, kx = W - m - kpw;
+    /* the keypad grows for long labels (Russian "Проверить") but never past 360 px */
+    int kpw, kw, kx;
+    SetFont(ui_f_tiny, BLACK);
+    kw = 88;
+    if (StringWidth(tr(&S_CHECK)) + 14 > kw) kw = StringWidth(tr(&S_CHECK)) + 14;
+    if (StringWidth(tr(&S_DEL)) + 14 > kw) kw = StringWidth(tr(&S_DEL)) + 14;
+    kpw = 3 * kw + 2 * gap;
+    if (kpw > 360) { kpw = 360; kw = (kpw - 2 * gap) / 3; }
+    kx = W - m - kpw;
     int keyh = (H - tb - 2 * m - 3 * gap) / 4;
     int ky = tb + m;
     for (i = 0; i < 9; i++)
       add_btn(kx + (i % 3) * (kw + gap), ky + (i / 3) * (keyh + gap), kw, keyh, 1 + i, DIGIT_LABEL[1 + i]);
-    add_btn(kx, ky + 3 * (keyh + gap), kw, keyh, B_DEL, "Del");
+    add_btn(kx, ky + 3 * (keyh + gap), kw, keyh, B_DEL, tr(&S_DEL));
     add_btn(kx + (kw + gap), ky + 3 * (keyh + gap), kw, keyh, B_D0, "0");
-    add_btn(kx + 2 * (kw + gap), ky + 3 * (keyh + gap), kw, keyh, B_CHECK, "Check");
+    add_btn(kx + 2 * (kw + gap), ky + 3 * (keyh + gap), kw, keyh, B_CHECK, tr(&S_CHECK));
     {
       int aw = (kx - m - gap - 2 * gap) / 3, ah = 62, ay = H - m - ah;
       add_btn(m, ay, aw, ah, B_PREV, "<");
-      add_btn(m + aw + gap, ay, aw, ah, B_RESET, "Reset");
+      add_btn(m + aw + gap, ay, aw, ah, B_RESET, tr(&S_RESET));
       add_btn(m + 2 * (aw + gap), ay, aw, ah, B_NEXT, ">");
       st_x = m; st_w = kx - m - gap; st_y = ay - 44;
     }
@@ -258,14 +290,10 @@ static void build_and_draw_grid(int draw) {
 
 static void draw_buttons(void) {
   int i;
-  for (i = 0; i < nbtn; i++) {
-    const Btn *b = &btns[i];
-    ui_box(b->x, b->y, b->w, b->h, 2, WHITE);
-    ui_text_center(ui_f_btn, BLACK, b->x, b->y, b->w, b->h, b->label);
-  }
+  for (i = 0; i < nbtn; i++) ui_draw_btn(&btns[i]);
 }
 
-static const char *HELP_TEXT =
+static const Str S_HELP_TEXT = S(
     "Each row is  a op b op c op d = result, worked strictly from left to right "
     "(no multiplication first).  x multiplies, : divides and must be exact.\n\n"
     "All numbers are whole, at least 1, without a leading zero. Every box is one digit.\n\n"
@@ -274,14 +302,32 @@ static const char *HELP_TEXT =
     "The bottom row repeats the four results and shows their total.\n\n"
     "Grey boxes are given. Tap a box, then a digit. Check turns broken rules black.\n\n"
     "Puzzle \"Example\" is the sample from the original game. Back key: leave a screen / go home.\n\n"
-    "Tap anywhere to close.";
+    "Tap anywhere to close.",
+    "Каждая строка: a op b op c op d = результат, действия строго слева направо "
+    "(умножение не выполняется первым).  x умножает, : делит и должно делиться нацело.\n\n"
+    "Все числа целые, не меньше 1, без ведущего нуля. В каждой клетке одна цифра.\n\n"
+    "Сумма первых чисел всех строк (столбец 1) равна результату строки 1; "
+    "столбец 2 — результату строки 2 и так далее.\n\n"
+    "Нижняя строка повторяет четыре результата и показывает их общий итог.\n\n"
+    "Серые клетки заданы. Нажмите клетку, затем цифру. «Проверить» закрашивает нарушенные правила чёрным.\n\n"
+    "Ребус «Пример» — образец из оригинальной игры. Клавиша «Назад»: закрыть экран / выйти домой.\n\n"
+    "Нажмите в любом месте, чтобы закрыть.",
+    "Jede Zeile lautet  a op b op c op d = Ergebnis und wird strikt von links nach rechts gerechnet "
+    "(keine Punkt-vor-Strich-Regel).  x multipliziert, : dividiert und muss aufgehen.\n\n"
+    "Alle Zahlen sind ganz, mindestens 1 und ohne führende Null. Jedes Kästchen ist eine Ziffer.\n\n"
+    "Spalte 1 (die ersten Zahlen aller Zeilen, addiert) muss das Ergebnis von Zeile 1 ergeben; "
+    "Spalte 2 das Ergebnis von Zeile 2 und so weiter.\n\n"
+    "Die untere Zeile wiederholt die vier Ergebnisse und zeigt ihre Summe.\n\n"
+    "Graue Kästchen sind vorgegeben. Kästchen antippen, dann eine Ziffer. „Prüfen“ färbt verletzte Regeln schwarz; „Reset“ leert das Quadrat.\n\n"
+    "Das Rätsel „Beispiel“ stammt aus dem Originalspiel. Zurück-Taste: Bildschirm verlassen / zum Start.\n\n"
+    "Tippen Sie irgendwo, um zu schließen.");
 
 static void draw_play(int W, int H) {
-  char t[48];
+  char t[64];
   const Puzzle *p = grids[cur].p;
   (void)H;
-  if (p->tutorial) snprintf(t, sizeof t, "Example  (1/%d)", NUM_PUZZLES);
-  else snprintf(t, sizeof t, "Puzzle %d/%d%s", cur, NUM_PUZZLES - 1, solved[cur] ? "  ok" : "");
+  if (p->tutorial) snprintf(t, sizeof t, tr(&S_EXAMPLE), NUM_PUZZLES);
+  else snprintf(t, sizeof t, tr(&S_PUZZLE), cur, NUM_PUZZLES - 1, solved[cur] ? "  ok" : "");
   ui_text_center(ui_f_title, BLACK, title_x, title_y, title_w, btns[0].h, t);
   draw_buttons();
   build_and_draw_grid(1);
@@ -296,12 +342,12 @@ static void draw_list(int W, int H) {
   int i, m = 12, top = 70, gap = 10, cols = 4, rows = (NUM_PUZZLES + cols - 1) / cols;
   int bw = (W - 2 * m - (cols - 1) * gap) / cols, bh = (H - top - 90 - (rows - 1) * gap) / rows;
   if (bh > bw) bh = bw;
-  ui_text_center(ui_f_title, BLACK, 0, 8, W, 50, "Square Rebuses - choose a puzzle");
+  ui_text_center(ui_f_title, BLACK, 0, 8, W, 50, tr(&S_LIST_TITLE));
   nbtn = 0;
   for (i = 0; i < NUM_PUZZLES; i++) {
     int x = m + (i % cols) * (bw + gap), y = top + (i / cols) * (bh + gap);
     char t[16];
-    if (grids[i].p->tutorial) snprintf(t, sizeof t, "Ex%s", solved[i] ? " ok" : "");
+    if (grids[i].p->tutorial) snprintf(t, sizeof t, "%s%s", tr(&S_EX_SHORT), solved[i] ? " ok" : "");
     else snprintf(t, sizeof t, "%d%s", i, solved[i] ? " ok" : "");
     ui_box(x, y, bw, bh, i == cur ? 4 : 2, solved[i] ? 0xDDDDDD : WHITE);
     ui_text_center(ui_f_btn, BLACK, x, y, bw, bh, t);
@@ -309,16 +355,15 @@ static void draw_list(int W, int H) {
   }
   {
     int bwid = 200, bx = (W - bwid) / 2, by = H - 80;
-    ui_box(bx, by, bwid, 64, 2, WHITE);
-    ui_text_center(ui_f_btn, BLACK, bx, by, bwid, 64, "Back");
-    add_btn(bx, by, bwid, 64, B_CLOSE, "Back");
+    add_btn(bx, by, bwid, 64, B_CLOSE, tr(&S_BACK));
+    ui_draw_btn(&btns[nbtn - 1]);
   }
 }
 
 static void draw_help(int W, int H) {
-  ui_text_center(ui_f_title, BLACK, 0, 8, W, 50, "How to play");
+  ui_text_center(ui_f_title, BLACK, 0, 8, W, 50, tr(&S_HELP_TITLE));
   SetFont(ui_f_small, BLACK);
-  DrawTextRect(16, 64, W - 32, H - 80, (char *)HELP_TEXT, ALIGN_LEFT);
+  DrawTextRect(16, 64, W - 32, H - 80, (char *)tr(&S_HELP_TEXT), ALIGN_LEFT);
 }
 
 static void redraw(int full) {
@@ -342,7 +387,7 @@ static void redraw(int full) {
 static void open_puzzle(int i) {
   cur = (i % NUM_PUZZLES + NUM_PUZZLES) % NUM_PUZZLES;
   have_marks = 0; reset_armed = 0; msg[0] = 0;
-  if (solved[cur]) strcpy(msg, "Solved before. Edit freely or press Reset.");
+  if (solved[cur]) strcpy(msg, tr(&S_SOLVED_BEFORE));
   select_first();
   save_state();
 }
@@ -353,7 +398,7 @@ static void enter_digit(int d) {
   have_marks = 0; reset_armed = 0; msg[0] = 0;
   if (grid_wins(g)) {
     solved[cur] = 1;
-    strcpy(msg, "Solved! Press > for the next puzzle.");
+    strcpy(msg, tr(&S_SOLVED_NEXT));
   } else {
     select_next();
   }
@@ -367,9 +412,9 @@ static void do_check(void) {
   have_marks = 1;
   grid_violations(g, &marks);
   for (i = 0; i < 75; i++) if (g->digit[i / 15][(i / 3) % 5][i % 3] < 0 && (i % 3) < g->width[i / 15][(i / 3) % 5]) empty++;
-  if (grid_wins(g)) { solved[cur] = 1; strcpy(msg, "Solved! Press > for the next puzzle."); save_state(); }
-  else if (marks.count) snprintf(msg, sizeof msg, "%d rule(s) broken: black boxes.", marks.count);
-  else snprintf(msg, sizeof msg, "No mistakes so far, %d box(es) empty.", empty);
+  if (grid_wins(g)) { solved[cur] = 1; strcpy(msg, tr(&S_SOLVED_NEXT)); save_state(); }
+  else if (marks.count) snprintf(msg, sizeof msg, tr(&S_BROKEN), marks.count);
+  else snprintf(msg, sizeof msg, tr(&S_NO_MISTAKES), empty);
 }
 
 static void do_button(int id) {
@@ -381,7 +426,7 @@ static void do_button(int id) {
       break;
     case B_CHECK: do_check(); break;
     case B_RESET:
-      if (!reset_armed) { reset_armed = 1; strcpy(msg, "Tap Reset again to clear the grid."); }
+      if (!reset_armed) { reset_armed = 1; strcpy(msg, tr(&S_RESET_AGAIN)); }
       else { grid_reset(g); solved[cur] = 0; have_marks = 0; reset_armed = 0; msg[0] = 0; select_first(); save_state(); }
       break;
     case B_PREV: open_puzzle(cur - 1); break;
@@ -485,8 +530,10 @@ static int rebus_pick_random(void) {
 
 const Module module_rebus = {
     "rebus",
-    "Square Rebuses",
-    "Arithmetic rebuses: fill in the boxes so every equation, column sum and the total check out.",
+    S("Square Rebuses", "Ребусы с квадратиками", "Zahlenrätsel-Quadrate"),
+    S("Arithmetic rebuses: fill in the boxes so every equation, column sum and the total check out.",
+      "Арифметические ребусы: заполните квадратики цифрами, чтобы сошлись все уравнения, суммы столбцов и итог.",
+      "Rechenrätsel: Füllen Sie die Kästchen so aus, dass jede Gleichung, jede Spaltensumme und das Ergebnis aufgeht."),
     rebus_init,
     rebus_enter,
     rebus_event,

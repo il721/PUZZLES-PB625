@@ -9,7 +9,7 @@
  *   expect TEXT   fail unless TEXT is drawn on the current screen
  *   expect_closed fail unless the app called CloseApp
  *   quit          EVT_EXIT
- * Text is approximated: width = 0.58 * size per char, height = 1.2 * size. */
+ * Text is approximated: width = 0.58 * size per Latin char (0.62 per other UTF-8 char), height = 1.2 * size. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,7 +21,7 @@ static iv_handler handler;
 static ifont *cur_font;
 static int cur_color;
 static char *svg;
-static struct { char t[64]; int cx, cy; } items[1024];
+static struct { char t[128]; int cx, cy; } items[1024];
 static int nitems;
 static size_t svg_len, svg_cap;
 
@@ -71,7 +71,17 @@ ifont *OpenFont(const char *name, int size, int aa) {
 }
 void CloseFont(ifont *f) { free(f->name); free(f); }
 void SetFont(ifont *f, int color) { cur_font = f; cur_color = color; }
-int StringWidth(const char *s) { return (int)(strlen(s) * cur_font->size * 58 / 100); }
+/* texts are UTF-8: count characters, not bytes */
+/* width in 1/100 px per font size unit: 0.58 em per Latin character, 0.62 em per Cyrillic/other (measured on Liberation Sans) */
+static int wunits(const char *s, size_t n) {
+  size_t i, w = 0;
+  for (i = 0; i < n; i++) {
+    if (((unsigned char)s[i] & 0xC0) == 0x80) continue;
+    w += ((unsigned char)s[i] < 0x80) ? 58 : 62;
+  }
+  return (int)w;
+}
+int StringWidth(const char *s) { return wunits(s, strlen(s)) * cur_font->size / 100; }
 
 static void esc(char *out, const char *s, size_t n) {
   size_t i, o = 0;
@@ -87,13 +97,13 @@ static void text_at(int x, int y, const char *s, size_t n) {
   char c[8], e[512];
   col(c, cur_color);
   esc(e, s, n);
-  if (nitems < 1024 && n < 64) {
+  if (nitems < 1024 && n < 128) {
     memcpy(items[nitems].t, s, n); items[nitems].t[n] = 0;
-    items[nitems].cx = x + (int)(n * cur_font->size * 58 / 100) / 2;
+    items[nitems].cx = x + wunits(s, n) * cur_font->size / 100 / 2;
     items[nitems].cy = y + cur_font->height / 2;
     nitems++;
   }
-  emit("<text x='%d' y='%d' font-family='DejaVu Sans, sans-serif' font-size='%d' font-weight='%s' fill='%s' xml:space='preserve'>%s</text>\n",
+  emit("<text x='%d' y='%d' font-family='Liberation Sans, DejaVu Sans, sans-serif' font-size='%d' font-weight='%s' fill='%s' xml:space='preserve'>%s</text>\n",
        x, y + cur_font->size, cur_font->size, cur_font->isbold ? "bold" : "normal", c, e);
 }
 
@@ -113,11 +123,11 @@ char *DrawTextRect(int x, int y, int w, int h, const char *s, int flags) {
       const char *q = p;
       while (*q && *q != ' ' && *q != '\n') q++;
       size_t wl = (size_t)(q - p);
-      int need = (int)((ln + wl + (ln ? 1 : 0)) * cur_font->size * 58 / 100);
+      int need = (wunits(line, ln) + wunits(p, wl) + (ln ? 58 : 0)) * cur_font->size / 100;
       if (ln && need > w) {
         line[ln] = 0;
         if (pass == 1) {
-          int lw = (int)(ln * cur_font->size * 58 / 100);
+          int lw = wunits(line, ln) * cur_font->size / 100;
           text_at((flags & ALIGN_CENTER) ? x + (w - lw) / 2 : x, ly, line, ln);
         }
         ly += lh; lines++; ln = 0;
@@ -127,7 +137,7 @@ char *DrawTextRect(int x, int y, int w, int h, const char *s, int flags) {
       if (*q == '\n' || !*q) {
         line[ln] = 0;
         if (pass == 1) {
-          int lw = (int)(ln * cur_font->size * 58 / 100);
+          int lw = wunits(line, ln) * cur_font->size / 100;
           text_at((flags & ALIGN_CENTER) ? x + (w - lw) / 2 : x, ly, line, ln);
         }
         ly += lh; lines++; ln = 0;

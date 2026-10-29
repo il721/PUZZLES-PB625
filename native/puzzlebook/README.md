@@ -11,7 +11,8 @@ buttons, log), `modules.c` (registry), `rebus/` (module "Square Rebuses"), `exam
 
 ## Add a module
 1. Copy `example/` to `native/puzzlebook/<name>/` and implement `const Module module_<name>` (`shell.h` documents
-   each callback): `init` loads the save file, `enter(puzzle)` opens it (-1 = resume) and must draw, `event`
+   each callback; `title`/`description` are `Str` triples `S("English", "Русский", "Deutsch")`, and every on-screen text of the module
+   should be one too, shown with `tr()` so the language setting applies): `init` loads the save file, `enter(puzzle)` opens it (-1 = resume) and must draw, `event`
    gets `EVT_SHOW`, `EVT_ORIENTATION`, `EVT_POINTERUP`, `EVT_KEYPRESS`, `save`, `puzzle_count`/`solved_count`
    (tutorials not counted) and `pick_random`.
 2. `modules.c`: add `extern const Module module_<name>;` and `&module_<name>` to `MODULES[]` (tile order).

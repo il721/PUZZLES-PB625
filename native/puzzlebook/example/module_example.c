@@ -11,6 +11,11 @@
 #define SAVEF "/mnt/ext1/example.sav"
 #endif
 
+static const Str S_HOME = S("Home", "Домой", "Start");
+static const Str S_TITLE = S("Example module", "Образец модуля", "Beispielmodul");
+static const Str S_TAP_DONE = S("Done! Tap to reset.", "Готово! Нажмите, чтобы сбросить.", "Fertig! Tippen zum Zurücksetzen.");
+static const Str S_TAP = S("Tap anywhere to finish.", "Нажмите в любом месте, чтобы закончить.", "Tippen Sie irgendwo, um fertig zu werden.");
+
 static int done;
 static UiBtn home_btn;
 
@@ -34,10 +39,10 @@ static void draw(void) {
   int W = ScreenWidth(), H = ScreenHeight();
   ui_fonts((W > H) ? 26 : 28);
   ClearScreen();
-  home_btn.x = W - 98; home_btn.y = 8; home_btn.w = 90; home_btn.h = 50; home_btn.id = 1; home_btn.label = "Home";
+  home_btn.x = W - 98; home_btn.y = 8; home_btn.w = 90; home_btn.h = 50; home_btn.id = 1; home_btn.label = tr(&S_HOME);
   ui_draw_btn(&home_btn);
-  ui_text_center(ui_f_title, BLACK, 0, 8, W - 100, 50, "Example module");
-  ui_text_center(ui_f_btn, BLACK, 0, H / 2 - 30, W, 60, done ? "Done! Tap to reset." : "Tap anywhere to finish.");
+  ui_text_center(ui_f_title, BLACK, 0, 8, W - 100, 50, tr(&S_TITLE));
+  ui_text_center(ui_f_btn, BLACK, 0, H / 2 - 30, W, 60, tr(done ? &S_TAP_DONE : &S_TAP));
   FullUpdate();
 }
 
@@ -70,6 +75,9 @@ static int solved(void) { return done; }
 static int pick_random(void) { return 0; }
 
 const Module module_example = {
-    "example", "Example module", "A template: copy native/puzzlebook/example to start a new game.",
+    "example", S("Example module", "Образец модуля", "Beispielmodul"),
+    S("A template: copy native/puzzlebook/example to start a new game.",
+      "Шаблон: скопируйте native/puzzlebook/example, чтобы начать новую игру.",
+      "Eine Vorlage: native/puzzlebook/example kopieren, um ein neues Spiel zu beginnen."),
     init, enter, event, save, count, solved, pick_random,
 };

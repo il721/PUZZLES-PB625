@@ -9,17 +9,17 @@ OUT=${OUT:-$T}
 mkdir -p "$OUT"
 N=native/puzzlebook
 gcc -Wall -Wextra -std=gnu99 -Itools/fake-inkview -c tools/fake-inkview/inkview_svg.c -o "$T/shim.o"
-for f in $N/shell.c $N/ui.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c; do
-  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DLOGF="\"$T/log.txt\"" \
+for f in $N/shell.c $N/ui.c $N/i18n.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c; do
+  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" \
     -Itools/fake-inkview -I$N -I$N/rebus -c $f -o "$T/$(basename $f .c).o"
 done
 gcc "$T"/*.o -o "$T/ui"
 
 # second variant: two modules (template module registered through tools/test-modules2.c)
 T2="$T/two"; mkdir -p "$T2"
-for f in $N/shell.c $N/ui.c tools/test-modules2.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/example/module_example.c; do
+for f in $N/shell.c $N/ui.c $N/i18n.c tools/test-modules2.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/example/module_example.c; do
   sv=rebus.sav; case $f in *example*) sv=example.sav;; esac
-  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/$sv\"" -DLOGF="\"$T/log.txt\"" \
+  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/$sv\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" \
     -Itools/fake-inkview -I$N -I$N/rebus -c $f -o "$T2/$(basename $f .c).o"
 done
 gcc "$T/shim.o" "$T2"/*.o -o "$T/ui2"
@@ -71,6 +71,7 @@ for tag in portrait landscape; do
   rm -f "$T/rebus.sav"
   if REBUS_SCRIPT="$T/$tag.script" "$T/ui"; then echo "PASS ui $tag"; else echo "FAIL ui $tag"; RC=1; fi
 done
+rm -f "$T/cfg" "$T/global.cfg"
 # the save file written by the last single-module run: 15 solved lines (14 puzzles + the sample)
 grep -c '^1 ' "$T/rebus.sav" | sed 's/^/solved puzzles saved: /'
 cat > "$T/two.script" <<EOS
@@ -94,6 +95,107 @@ expect_closed
 EOS
 rm -f "$T/rebus.sav"
 if REBUS_SCRIPT="$T/two.script" "$T/ui2"; then echo "PASS two modules"; else echo "FAIL two modules"; RC=1; fi
+
+# ---- languages and the Settings screen: Russian and German walk-throughs, "system" follows the reader's global.cfg,
+# the choice is saved to the cfg file and read back by the next start
+for tag in portrait landscape; do
+  if [ $tag = portrait ]; then SZ="600 800"; else SZ="800 600"; fi
+  rm -f "$T/cfg" "$T/global.cfg" "$T/rebus.sav"
+  cat > "$T/lang-$tag.script" <<EOS
+size $SZ
+show
+expect Puzzle Book
+expect 0 / 15 solved
+tapl Settings
+expect Language
+expect System default
+svg $OUT/$tag-settings-en.svg
+tapl Русский
+expect Язык
+expect Как в системе
+svg $OUT/$tag-settings-ru.svg
+tapl Назад
+expect Головоломки
+expect Случайный
+expect решено 0 / 15
+expect Ребусы с квадратиками
+svg $OUT/$tag-home-ru.svg
+tapl ?
+expect Головоломки - справка
+svg $OUT/$tag-homehelp-ru.svg
+tap 300 400
+tapl Ребусы с квадратиками
+expect Ребус 1/15
+expect Проверить
+expect Стереть
+svg $OUT/$tag-play-ru.svg
+tapl Проверить
+expect Ошибок нет
+tapl Сбросить
+expect «Сбросить» ещё раз
+tapl Список
+expect Выберите ребус
+svg $OUT/$tag-list-ru.svg
+tapl Назад
+tapl ?
+expect Как играть
+svg $OUT/$tag-help-ru.svg
+tap 300 400
+tapl Домой
+tapl Настройки
+tapl Deutsch
+expect Sprache
+expect Systemsprache
+tapl Zurück
+expect Rätselbuch
+expect Zufall
+expect gelöst 0 / 15
+expect Zahlenrätsel-Quadrate
+svg $OUT/$tag-home-de.svg
+tapl Zahlenrätsel-Quadrate
+expect Rätsel 1/15
+expect Prüfen
+tapl Prüfen
+expect Keine Fehler
+svg $OUT/$tag-play-de.svg
+tapl ?
+expect Spielregeln
+svg $OUT/$tag-help-de.svg
+tap 300 400
+tapl Reset
+expect Noch einmal
+tapl Liste
+expect Rätsel wählen
+tapl Zurück
+key 27
+expect Rätselbuch
+key 23
+expect Einstellungen
+key 27
+expect Rätselbuch
+tapl Einstellungen
+tapl English
+expect Language
+tapl Back
+expect Puzzle Book
+quit
+EOS
+  if REBUS_SCRIPT="$T/lang-$tag.script" "$T/ui"; then echo "PASS languages $tag"; else echo "FAIL languages $tag"; RC=1; fi
+  if [ "$(cat "$T/cfg")" = "lang=en" ]; then echo "PASS language saved"; else echo "FAIL language saved: $(cat "$T/cfg")"; RC=1; fi
+done
+
+# system default follows the reader's language (language=ru in global.cfg); an unknown one falls back to English
+rm -f "$T/cfg" "$T/rebus.sav"
+printf 'timezone=Europe/Moscow\nlanguage=ru\n' > "$T/global.cfg"
+printf 'size 600 800\nshow\nexpect Головоломки\ntapl Настройки\nexpect Как в системе\ntapl Deutsch\nexpect Einstellungen\nquit\n' > "$T/sys-ru.script"
+if REBUS_SCRIPT="$T/sys-ru.script" "$T/ui"; then echo "PASS system language ru"; else echo "FAIL system language ru"; RC=1; fi
+# next start: the saved fixed language wins over the reader's one
+printf 'size 600 800\nshow\nexpect Rätselbuch\nexpect Zufall\nquit\n' > "$T/sys-de.script"
+if REBUS_SCRIPT="$T/sys-de.script" "$T/ui"; then echo "PASS saved language wins"; else echo "FAIL saved language wins"; RC=1; fi
+printf 'language=fr\n' > "$T/global.cfg"; rm -f "$T/cfg"
+printf 'size 600 800\nshow\nexpect Puzzle Book\nquit\n' > "$T/sys-fr.script"
+if REBUS_SCRIPT="$T/sys-fr.script" "$T/ui"; then echo "PASS unknown system language -> English"; else echo "FAIL unknown system language"; RC=1; fi
+rm -f "$T/cfg" "$T/global.cfg"
 
 if [ -n "$KEEP" ] || [ "$OUT" != "$T" ]; then
   if node -e "require('playwright')" 2>/dev/null; then

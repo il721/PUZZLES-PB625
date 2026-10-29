@@ -6,7 +6,7 @@
 #define LOGF "/mnt/ext1/puzzlebook.txt"
 #endif
 
-ifont *ui_f_btn, *ui_f_small, *ui_f_title;
+ifont *ui_f_btn, *ui_f_small, *ui_f_title, *ui_f_tiny;
 static int fonts_size;
 
 void ui_log(const char *fmt, int a, int b, int c) {
@@ -28,9 +28,11 @@ void ui_fonts(int btn_size) {
   if (ui_f_btn) CloseFont(ui_f_btn);
   if (ui_f_small) CloseFont(ui_f_small);
   if (ui_f_title) CloseFont(ui_f_title);
+  if (ui_f_tiny) CloseFont(ui_f_tiny);
   ui_f_btn = ui_open_font("LiberationSans-Bold", btn_size);
   ui_f_small = ui_open_font("LiberationSans", btn_size * 8 / 10);
   ui_f_title = ui_open_font("LiberationSans-Bold", btn_size * 9 / 10);
+  ui_f_tiny = ui_open_font("LiberationSans-Bold", btn_size * 66 / 100);
   fonts_size = btn_size;
 }
 
@@ -49,8 +51,12 @@ void ui_box(int x, int y, int w, int h, int thick, int fill) {
 }
 
 void ui_draw_btn(const UiBtn *b) {
+  ifont *f = ui_f_btn;
   ui_box(b->x, b->y, b->w, b->h, 2, WHITE);
-  ui_text_center(ui_f_btn, BLACK, b->x, b->y, b->w, b->h, b->label);
+  SetFont(f, BLACK);
+  if (StringWidth(b->label) > b->w - 16) { f = ui_f_small; SetFont(f, BLACK); }
+  if (StringWidth(b->label) > b->w - 16) f = ui_f_tiny;
+  ui_text_center(f, BLACK, b->x, b->y, b->w, b->h, b->label);
 }
 
 int ui_hit(const UiBtn *b, int x, int y) { return x >= b->x && x < b->x + b->w && y >= b->y && y < b->y + b->h; }

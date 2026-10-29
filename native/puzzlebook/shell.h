@@ -13,11 +13,12 @@
 #define SHELL_H
 
 #include "inkview.h"
+#include "i18n.h"
 
 typedef struct Module {
   const char *id;          /* short stable id; also the save file: /mnt/ext1/<id>.sav */
-  const char *title;       /* shown on the home tile */
-  const char *description; /* one or two sentences, shown on the tile and in the help */
+  Str title;               /* shown on the home tile (all languages, see i18n.h) */
+  Str description;         /* one or two sentences, shown on the tile */
   void (*init)(void);      /* once at start: build state, load the save file */
   void (*enter)(int puzzle); /* open the module: puzzle >= 0 opens that puzzle, -1 resumes. Must draw. */
   /* Events while the module is open (EVT_SHOW, EVT_ORIENTATION, EVT_POINTERUP, EVT_KEYPRESS).
@@ -38,12 +39,12 @@ void shell_leave(void);
 /* ---- shared drawing helpers (ui.c) ---- */
 typedef struct { int x, y, w, h, id; const char *label; } UiBtn;
 
-extern ifont *ui_f_btn, *ui_f_small, *ui_f_title; /* set by ui_fonts() */
+extern ifont *ui_f_btn, *ui_f_small, *ui_f_title, *ui_f_tiny; /* set by ui_fonts() */
 void ui_fonts(int btn_size);
 ifont *ui_open_font(const char *name, int size);
 void ui_text_center(ifont *f, int color, int x, int y, int w, int h, const char *s);
 void ui_box(int x, int y, int w, int h, int thick, int fill);
-void ui_draw_btn(const UiBtn *b);
+void ui_draw_btn(const UiBtn *b); /* label shrinks (btn -> small -> tiny font) until it fits: Russian/German words are long */
 int ui_hit(const UiBtn *b, int x, int y);
 void ui_log(const char *fmt, int a, int b, int c); /* appends to /mnt/ext1/puzzlebook.txt */
 
