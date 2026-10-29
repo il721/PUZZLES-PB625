@@ -26,9 +26,9 @@ gcc "$T/shim.o" "$T2"/*.o -o "$T/ui2"
 
 # third variant: the real registry (modules.c): Square Rebuses + Digit Rebuses
 T3="$T/full"; mkdir -p "$T3"
-for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/digit/module_digit.c $N/digit/digit_core.c $N/domino/module_domino.c $N/domino/domino_core.c $N/labyrinth/module_labyrinth.c $N/labyrinth/labyrinth_core.c $N/squareword/module_squareword.c $N/squareword/squareword_core.c; do
-  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DDIGITSAVEF="\"$T/digit.sav\"" -DDOMINOSAVEF="\"$T/domino.sav\"" -DLABYRINTHSAVEF="\"$T/labyrinth.sav\"" -DSQUAREWORDSAVEF="\"$T/squareword.sav\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" -DPROGF="\"$T/progress.json\"" \
-    -Itools/fake-inkview -I$N -I$N/rebus -I$N/digit -I$N/domino -I$N/labyrinth -I$N/squareword -c $f -o "$T3/$(basename $f .c).o"
+for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/digit/module_digit.c $N/digit/digit_core.c $N/domino/module_domino.c $N/domino/domino_core.c $N/labyrinth/module_labyrinth.c $N/labyrinth/labyrinth_core.c $N/squareword/module_squareword.c $N/squareword/squareword_core.c $N/keyword/module_keyword.c $N/keyword/keyword_core.c; do
+  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DDIGITSAVEF="\"$T/digit.sav\"" -DDOMINOSAVEF="\"$T/domino.sav\"" -DLABYRINTHSAVEF="\"$T/labyrinth.sav\"" -DSQUAREWORDSAVEF="\"$T/squareword.sav\"" -DKEYWORDSAVEF="\"$T/keyword.sav\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" -DPROGF="\"$T/progress.json\"" \
+    -Itools/fake-inkview -I$N -I$N/rebus -I$N/digit -I$N/domino -I$N/labyrinth -I$N/squareword -I$N/keyword -c $f -o "$T3/$(basename $f .c).o"
 done
 gcc "$T/shim.o" "$T3"/*.o -o "$T/ui3"
 
@@ -632,7 +632,7 @@ for W, H, tag in ((600, 800, 'portrait'), (800, 600, 'landscape')):
     open('%s/squareword-%s.script' % (T, tag), 'w').write(script(W, H, tag))
 PY
 for tag in portrait landscape; do
-  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav" "$T/cfg" "$T/global.cfg"
+  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav" "$T/keyword.sav" "$T/cfg" "$T/global.cfg"
   if REBUS_SCRIPT="$T/squareword-$tag.script" "$T/ui3"; then echo "PASS squarewords $tag"; else echo "FAIL squarewords $tag"; RC=1; fi
 done
 # the save file: 18 puzzle lines, 17 solved (the sample was reset), the solved boards reload through the app and win
@@ -672,7 +672,7 @@ rm -f "$T/squareword.sav"
 
 # Squarewords in Russian and German (the letters stay Cyrillic)
 for lg in ru de; do
-  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav"; printf 'lang=%s\n' $lg > "$T/cfg"
+  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav" "$T/keyword.sav"; printf 'lang=%s\n' $lg > "$T/cfg"
   if [ $lg = ru ]; then TILE="Сквэрворды"; T1="Сквэрворд 1/17"; F8="Заполнено: 8 из 25"; REP="повторяется"; LS="Выберите головоломку"; HP="Как играть"; HM="Домой"; SOL="Решено!"; LST="Список"; RS="Сбросить"; else TILE="Quadratwörter"; T1="Quadratwort 1/17"; F8="Ausgefüllt: 8 von 25"; REP="wiederholt"; LS="Rätsel wählen"; HP="Spielregeln"; HM="Start"; SOL="Gelöst!"; LST="Liste"; RS="Reset"; fi
   python3 - "$T" "$lg" "$TILE" "$T1" "$F8" "$REP" "$LS" "$HP" "$HM" "$SOL" "$LST" "$RS" <<'PY'
 import json, sys
@@ -696,7 +696,7 @@ rm -f "$T/cfg" "$T/squareword.sav"
 
 # ---- Squarewords progress: "filled" letters in the progress file, both ways, bad entries skipped
 P="$T/progress.json"
-rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav" "$T/cfg" "$P"
+rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav" "$T/keyword.sav" "$T/cfg" "$P"
 python3 - "$T" <<'PY'
 import json, sys
 T = sys.argv[1]
@@ -762,10 +762,218 @@ print('PASS squarewords merged save file')
 PY
 rm -f "$T/squareword.sav" "$P"
 
+# ---- Keyword Rebuses (sixth real module, real registry): solve all 18 puzzles with letter + digit taps, portrait and landscape
+python3 - "$T" "$OUT" <<'PY'
+import json, sys
+T, OUT = sys.argv[1:3]
+data = sorted(json.load(open('native/puzzlebook/keyword/module07.json'))['puzzles'], key=lambda p: (not p.get('tutorial'), p['id']))
+
+def letters(p):          # order of first appearance = order of the on-screen letter bank
+    seen = []
+    for r in p['words']:
+        for w in r:
+            for ch in w:
+                if ch not in seen: seen.append(ch)
+    return seen
+
+def dig(p, ch): return p['keyword'].index(ch)
+json.dump([''.join(str(dig(p, ch)) for ch in letters(p)) for p in data], open(T + '/keyword-solutions.json', 'w'))
+
+def script(W, H, tag):
+    L = ['size %d %d' % (W, H), 'show', 'expect 0 / 17 solved', 'expect Keyword Rebuses', 'tapl Keyword Rebuses', 'expect Keyword Rebus 1/17',
+         'expect Letters with a digit: 0 of 10', 'svg %s/%s-kw-start.svg' % (OUT, tag)]
+    order = list(range(1, len(data))) + [0]
+    for n, i in enumerate(order):
+        p = data[i]; ls = letters(p)
+        if i in (1, 8, 15):   # a wrong bijection first (two letters swapped): black signs, then fix one letter at a time (a digit on two letters)
+            a, b = [ch for ch in ls if dig(p, ch) != 0][:2]
+            for ch in ls: L += ['tapl ' + ch, 'tapl %d' % (dig(p, b) if ch == a else dig(p, a) if ch == b else dig(p, ch))]
+            L += ['expect Letters with a digit: 10 of 10', 'expect Black signs', 'expect_not All six equations', 'svg %s/%s-kw-wrong-%d.svg' % (OUT, tag, i),
+                  'tapl ' + a, 'tapl %d' % dig(p, a), 'expect A digit is on two', 'expect_not Black signs', 'svg %s/%s-kw-dup-%d.svg' % (OUT, tag, i),
+                  'tapl ' + b, 'tapl %d' % dig(p, b)]
+        else:
+            for ch in ls: L += ['tapl ' + ch, 'tapl %d' % dig(p, ch)]
+        L += ['expect All six equations', 'expect ' + p['keyword'], 'expect_not Black signs']
+        if i in (4, 15): L.append('svg %s/%s-kw-solved-%d.svg' % (OUT, tag, i))
+        if n < len(order) - 1: L.append('tapl >')
+    # on the Example (solved): Reset (twice), a digit with no letter, a leading zero, a digit on two letters, select / deselect
+    p = data[0]; ls = letters(p)
+    L += ['tapl Reset', 'expect Tap Reset again', 'tapl Reset', 'expect Letters with a digit: 0 of 10', 'expect_not All six equations',
+          'tapl 5', 'expect Tap a letter first',
+          'tapl ' + ls[0], 'svg %s/%s-kw-selected.svg' % (OUT, tag), 'tapl 0', 'expect A word of several', 'svg %s/%s-kw-lead0.svg' % (OUT, tag),
+          'tapl Del', 'expect_not A word of several', 'expect Letters with a digit: 0 of 10',
+          'tapl 2', 'expect Letters with a digit: 1 of 10',
+          'tapl ' + ls[1], 'tapl 2', 'expect A digit is on two', 'svg %s/%s-kw-conflict.svg' % (OUT, tag), 'tapl Del', 'expect_not A digit is on two',
+          'tapl ' + ls[1], 'tapl 5', 'expect Tap a letter first',                              # a tap on the selected letter deselects it
+          'tapl ' + ls[0], 'tapl Del', 'expect Letters with a digit: 0 of 10',
+          'tapl List', 'expect Keyword Rebuses - choose a puzzle', 'svg %s/%s-kw-list.svg' % (OUT, tag), 'tapl Back',
+          'tapl ?', 'expect How to play', 'svg %s/%s-kw-help.svg' % (OUT, tag), 'key 27', 'expect Example',
+          'key 23', 'expect 17 / 17 solved', 'expect 0 / 15 solved', 'tapl Keyword Rebuses', 'tapl List', 'tapl Home', 'expect 17 / 17 solved',
+          'tapl Keyword Rebuses', 'tapl Home', 'expect 17 / 17 solved', 'key 27', 'expect_closed']
+    return '\n'.join(L) + '\n'
+
+for W, H, tag in ((600, 800, 'portrait'), (800, 600, 'landscape')):
+    open('%s/keyword-%s.script' % (T, tag), 'w').write(script(W, H, tag))
+PY
+for tag in portrait landscape; do
+  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav" "$T/keyword.sav" "$T/cfg" "$T/global.cfg"
+  if REBUS_SCRIPT="$T/keyword-$tag.script" "$T/ui3"; then echo "PASS keyword rebuses $tag"; else echo "FAIL keyword rebuses $tag"; RC=1; fi
+done
+# the save file: 18 puzzle lines, 17 solved (the sample was reset), every solved board holds the book's digits
+python3 - "$T/keyword.sav" "$T/keyword-solutions.json" <<'PY' || { echo "FAIL keyword save file"; RC=1; }
+import json, sys
+lines = open(sys.argv[1]).read().split('\n')
+sol = json.load(open(sys.argv[2]))
+assert lines[0] == 'v1 0', lines[0]
+rows = [l.split(' ') for l in lines[1:19]]
+assert len(rows) == 18 and lines[19] == ''
+assert [r[0] for r in rows] == ['0'] + ['1'] * 17, [r[0] for r in rows]
+assert rows[0][1] == '-' * 10, rows[0]                         # the sample was reset
+for r, s in zip(rows[1:], sol[1:]): assert r[1] == s, (r, s)
+assert all(r[2].isdigit() and int(r[2]) > 1700000000000 for r in rows[1:]), rows
+print('PASS keyword save file')
+PY
+rm -f "$T/keyword.sav"
+# the save file survives a restart: solve p01 only, leave, run again, p01 is still solved and Keyword Rebuses shows 1 / 17
+python3 - "$T" <<'PY'
+import json, sys
+T = sys.argv[1]
+data = sorted(json.load(open('native/puzzlebook/keyword/module07.json'))['puzzles'], key=lambda p: (not p.get('tutorial'), p['id']))
+p = data[1]
+seen = []
+for r in p['words']:
+    for w in r:
+        for ch in w:
+            if ch not in seen: seen.append(ch)
+L = ['size 600 800', 'show', 'tapl Keyword Rebuses']
+for ch in seen: L += ['tapl ' + ch, 'tapl %d' % p['keyword'].index(ch)]
+L += ['expect All six equations', 'quit']
+open(T + '/kw-restart1.script', 'w').write('\n'.join(L) + '\n')
+open(T + '/kw-restart2.script', 'w').write('\n'.join(['size 600 800', 'show', 'expect 1 / 17 solved', 'tapl Keyword Rebuses', 'expect Keyword Rebus 1/17', 'expect ok',
+                                                      'expect All six equations', 'expect ' + p['keyword'], 'quit']) + '\n')
+PY
+REBUS_SCRIPT="$T/kw-restart1.script" "$T/ui3" >/dev/null
+if REBUS_SCRIPT="$T/kw-restart2.script" "$T/ui3"; then echo "PASS keyword rebuses restart"; else echo "FAIL keyword rebuses restart"; RC=1; fi
+rm -f "$T/keyword.sav"
+
+# Keyword Rebuses in Russian and German
+for lg in ru de; do
+  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav" "$T/keyword.sav"; printf 'lang=%s\n' $lg > "$T/cfg"
+  if [ $lg = ru ]; then TILE="Ребусы с ключевыми словами"; T1="Ребус с ключом 1/17"; F0="Букв с цифрой: 0 из 10"; DUP="Одна цифра у двух"; LS="Выберите ребус"; HP="Как играть"; HM="Домой"; SOL="Все шесть"; LST="Список"; DEL="Стереть"; else TILE="Schlüsselwort-Rätsel"; T1="Rechenrätsel 1/17"; F0="Buchstaben mit Ziffer: 0 von 10"; DUP="Eine Ziffer gehört"; LS="Rätsel wählen"; HP="Spielregeln"; HM="Start"; SOL="Alle sechs"; LST="Liste"; DEL="Löschen"; fi
+  python3 - "$T" "$lg" "$TILE" "$T1" "$F0" "$DUP" "$LS" "$HP" "$HM" "$SOL" "$LST" "$DEL" <<'PY'
+import json, sys
+T, lg, TILE, T1, F0, DUP, LS, HP, HM, SOL, LST, DEL = sys.argv[1:]
+data = sorted(json.load(open('native/puzzlebook/keyword/module07.json'))['puzzles'], key=lambda p: (not p.get('tutorial'), p['id']))
+p = data[1]
+seen = []
+for r in p['words']:
+    for w in r:
+        for ch in w:
+            if ch not in seen: seen.append(ch)
+d = lambda ch: p['keyword'].index(ch)
+L = ['size 600 800', 'show', 'tapl ' + TILE, 'expect ' + T1, 'expect ' + F0, 'tapl ' + seen[0], 'tapl %d' % d(seen[0]), 'tapl ' + seen[1], 'tapl %d' % d(seen[0]),
+     'expect ' + DUP, 'tapl ' + DEL, 'expect_not ' + DUP,
+     'tapl ?', 'expect ' + HP, 'tap 300 400', 'tapl ' + LST, 'expect ' + LS, 'tapl ' + HM, 'expect ' + TILE, 'tapl ' + TILE]
+for ch in seen: L += ['tapl ' + ch, 'tapl %d' % d(ch)]
+L += ['expect ' + SOL, 'expect ' + p['keyword'], 'quit']
+open('%s/kw-%s.script' % (T, lg), 'w').write('\n'.join(L) + '\n')
+PY
+  if REBUS_SCRIPT="$T/kw-$lg.script" "$T/ui3"; then echo "PASS keyword rebuses $lg"; else echo "FAIL keyword rebuses $lg"; RC=1; fi
+done
+rm -f "$T/cfg" "$T/keyword.sav"
+
+# ---- Keyword Rebuses progress: "assignment" in the progress file, both ways, bad entries rejected
+P="$T/progress.json"
+rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav" "$T/keyword.sav" "$T/cfg" "$P"
+python3 - "$T" <<'PY'
+import json, sys
+T = sys.argv[1]
+data = sorted(json.load(open('native/puzzlebook/keyword/module07.json'))['puzzles'], key=lambda p: (not p.get('tutorial'), p['id']))
+def letters(p):
+    seen = []
+    for r in p['words']:
+        for w in r:
+            for ch in w:
+                if ch not in seen: seen.append(ch)
+    return seen
+L = ['size 600 800', 'show', 'tapl Keyword Rebuses']
+for ch in letters(data[1]): L += ['tapl ' + ch, 'tapl %d' % data[1]['keyword'].index(ch)]
+L += ['expect All six equations', 'tapl >']
+for ch in letters(data[2])[:3]: L += ['tapl ' + ch, 'tapl %d' % data[2]['keyword'].index(ch)]
+L += ['expect Letters with a digit: 3 of 10', 'tapl Home', 'tapl Settings', 'tapl Save progress to a file', 'expect Progress saved.', 'quit']
+open(T + '/kwprog-export.script', 'w').write('\n'.join(L) + '\n')
+open(T + '/kwprog-import.script', 'w').write('\n'.join([
+  'size 600 800', 'show', 'tapl Settings', 'tapl Load progress from a file', 'tapl Load', 'expect Puzzles added: 2, updated: 0.', 'tapl Back',
+  'expect 1 / 17 solved', 'tapl Keyword Rebuses', 'expect Keyword Rebus 1/17', 'expect All six equations', 'tapl >', 'expect Keyword Rebus 2/17',
+  'expect Letters with a digit: 3 of 10', 'quit']) + '\n')
+PY
+if REBUS_SCRIPT="$T/kwprog-export.script" "$T/ui3"; then echo "PASS keyword rebuses progress export"; else echo "FAIL keyword rebuses progress export"; RC=1; fi
+python3 - "$P" <<'PY' || { echo "FAIL keyword rebuses progress file content"; RC=1; }
+import json, sys
+b = json.load(open(sys.argv[1]))
+data = sorted(json.load(open('native/puzzlebook/keyword/module07.json'))['puzzles'], key=lambda p: (not p.get('tutorial'), p['id']))
+def letters(p):
+    seen = []
+    for r in p['words']:
+        for w in r:
+            for ch in w:
+                if ch not in seen: seen.append(ch)
+    return seen
+s = b['namespaces']['module_keyword_rebus']['puzzles']
+assert list(s) == ['p01', 'p02'], list(s)
+want1 = {ch: data[1]['keyword'].index(ch) for ch in letters(data[1])}
+want2 = {ch: data[2]['keyword'].index(ch) for ch in letters(data[2])[:3]}
+assert s['p01']['solved'] is True and s['p01']['assignment'] == want1 and 'cells' not in s['p01']
+assert s['p02']['solved'] is False and s['p02']['assignment'] == want2, s['p02']
+assert s['p02']['updatedAt'] > 1700000000000 and s['p02']['elapsedMs'] == 0 and s['p02']['checks'] == 0
+print('PASS keyword rebuses progress file content')
+PY
+rm -f "$T/keyword.sav"
+if REBUS_SCRIPT="$T/kwprog-import.script" "$T/ui3"; then echo "PASS keyword rebuses progress import"; else echo "FAIL keyword rebuses progress import"; RC=1; fi
+# the app's shape: an entry with a foreign letter, a digit above 9 or the same letter twice is rejected as a whole (fresh board,
+# solved flag ignored); a solved entry with no letters is kept as solved; an empty one is not progress
+python3 - "$T" <<'PY'
+import json, sys
+T = sys.argv[1]
+data = sorted(json.load(open('native/puzzlebook/keyword/module07.json'))['puzzles'], key=lambda p: (not p.get('tutorial'), p['id']))
+def letters(p):
+    seen = []
+    for r in p['words']:
+        for w in r:
+            for ch in w:
+                if ch not in seen: seen.append(ch)
+    return seen
+l3, l5 = letters(data[3]), letters(data[5])
+B = {'bundleVersion': 1, 'namespaces': {'module_keyword_rebus': {'puzzles': {
+  'p03': {'assignment': {l3[0]: 4, l3[1]: 7, l3[2]: 0}, 'solved': False, 'updatedAt': 1700000000000, 'elapsedMs': 9000},
+  'p04': {'assignment': {'Z': 3}, 'solved': True, 'updatedAt': 1700000000000},
+  'p05': {'assignment': {l5[0]: 12}, 'solved': False, 'updatedAt': 1700000000000},
+  'p06': {'assignment': {}, 'solved': True, 'updatedAt': 1700000000000},
+  'p07': {'assignment': {}, 'solved': False}}}}}
+json.dump(B, open(T + '/bundle-kw.json', 'w'), ensure_ascii=False)
+open(T + '/kwprog-merge.script', 'w').write('\n'.join(['size 600 800', 'show', 'tapl Settings', 'tapl Load progress from a file', 'tapl Load',
+  'expect Puzzles added: 4, updated: 0.', 'quit']) + '\n')
+PY
+cp "$T/bundle-kw.json" "$P"
+rm -f "$T/keyword.sav"
+if REBUS_SCRIPT="$T/kwprog-merge.script" "$T/ui3"; then echo "PASS keyword rebuses progress app-shaped bundle"; else echo "FAIL keyword rebuses progress app-shaped bundle"; RC=1; fi
+python3 - "$T/keyword.sav" <<'PY' || { echo "FAIL keyword rebuses merged save file"; RC=1; }
+import sys
+rows = [l.split(' ') for l in open(sys.argv[1]).read().split('\n')[1:19]]
+p03, p04, p05, p06 = rows[3], rows[4], rows[5], rows[6]
+assert p03[0] == '0' and p03[1] == '470-------' and p03[2] == '1700000000000', p03
+assert p04[0] == '0' and p04[1] == '-' * 10, p04
+assert p05[0] == '0' and p05[1] == '-' * 10, p05
+assert p06[0] == '1' and p06[1] == '-' * 10 and p06[2] == '1700000000000', p06
+assert all(r[0] == '0' and r[1] == '-' * 10 for i, r in enumerate(rows) if i not in (3, 6)), rows
+print('PASS keyword rebuses merged save file')
+PY
+rm -f "$T/keyword.sav" "$P"
+
 # ---- the home screen shows every game at once (no paging), portrait and landscape
 for sz in '600 800' '800 600'; do
-  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav" "$T/cfg" "$T/global.cfg"
-  printf 'size %s\nshow\nexpect Square Rebuses\nexpect Digit Rebuses\nexpect Domino Solitaire\nexpect Alphabet Labyrinth\nexpect Squarewords\nexpect Settings\nexpect_not &gt;\nquit\n' "$sz" > "$T/home-all.script"
+  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav" "$T/keyword.sav" "$T/cfg" "$T/global.cfg"
+  printf 'size %s\nshow\nexpect Square Rebuses\nexpect Digit Rebuses\nexpect Domino Solitaire\nexpect Alphabet Labyrinth\nexpect Squarewords\nexpect Keyword Rebuses\nexpect Settings\nexpect_not &gt;\nquit\n' "$sz" > "$T/home-all.script"
   if REBUS_SCRIPT="$T/home-all.script" "$T/ui3"; then echo "PASS home shows all games ($sz)"; else echo "FAIL home shows all games ($sz)"; RC=1; fi
 done
 

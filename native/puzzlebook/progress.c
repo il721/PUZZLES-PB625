@@ -130,6 +130,14 @@ static void put_entry(FILE *f, const char *id, const ProgEntry *e, int last) {
       for (k = 0; k < e->nlist[l]; k++) fprintf(f, "%s[%d, %d]", k ? ", " : "", e->list[l][k][0], e->list[l][k][1]);
       fprintf(f, "]");
     }
+  } else if (e->has_asg) {
+    fprintf(f, "            \"assignment\": {");
+    for (k = 0; k < e->nasg; k++) {
+      char u[4];
+      ui_utf8(e->asg_cp[k], u);
+      fprintf(f, "%s\"%s\": %d", k ? ", " : "", u, e->asg_digit[k]);
+    }
+    fprintf(f, "}");
   } else if (e->has_fill) {
     fprintf(f, "            \"filled\": {");
     for (k = 0; k < e->nfill; k++) {
@@ -307,7 +315,26 @@ static int read_entry(int node, ProgEntry *e) {
       }
     }
   }
-  return e->solved || e->nfill > 0 || e->ncells > 0 || e->ndom > 0 || e->nlist[0] > 1 || e->nlist[1] > 1 || e->nlist[2] > 0 || e->nlist[3] > 0; /* an entry with nothing in it is not progress */
+  /* "assignment": {"letter": digit} (Keyword Rebuses); a value that is not a digit 0..9, a key that is not one letter or
+   * more than ten letters make the entry bad (the module drops it as a whole, like the source's fromJson) */
+  {
+    int as = jfind(node, "assignment"), a;
+    if (as >= 0 && pool[as].type == J_OBJ) {
+      e->has_asg = 1;
+      for (a = pool[as].child; a >= 0; a = pool[a].next) {
+        char kb[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+        unsigned cp;
+        if (e->nasg >= PROG_MAX_ASG || pool[a].type != J_NUM || pool[a].num < 0 || pool[a].num > 9 || pool[a].klen < 1 || pool[a].klen > 3) { e->asg_bad = 1; continue; }
+        memcpy(kb, pool[a].key, (size_t)pool[a].klen);
+        cp = ui_cp(kb);
+        if (!cp) { e->asg_bad = 1; continue; }
+        e->asg_cp[e->nasg] = (unsigned short)cp;
+        e->asg_digit[e->nasg] = (unsigned char)pool[a].num;
+        e->nasg++;
+      }
+    }
+  }
+  return e->solved || e->nasg > 0 || e->asg_bad || e->nfill > 0 || e->ncells > 0 || e->ndom > 0 || e->nlist[0] > 1 || e->nlist[1] > 1 || e->nlist[2] > 0 || e->nlist[3] > 0; /* an entry with nothing in it is not progress */
 }
 
 void progress_apply(int *added, int *updated) {

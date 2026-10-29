@@ -18,13 +18,14 @@
 /* One puzzle's progress, the unit of the save/load-to-file feature (see progress.c). Cell keys and the entry
  * layout are those of il721/puzzles ("cells": {"row:slot:pos": digit} for Square Rebuses, {"row:col": digit} for
  * Digit Rebuses, "placed": [[[r,c],[r,c]], ...] for Domino Solitaire, "chainA"/"chainZ"/"crosses"/"marks": [[r,c], ...]
- * for Alphabet Labyrinth, "filled": {"r,c": "letter"} for Squarewords), so a progress file can move between the
+ * for Alphabet Labyrinth, "filled": {"r,c": "letter"} for Squarewords, "assignment": {"letter": digit} for Keyword Rebuses), so a progress file can move between the
  * reader and the app. progress.c clears the entry before every prog_get, so a module only sets what it uses. */
 #define PROG_MAX_CELLS 80
 #define PROG_MAX_DOMS 28
 #define PROG_LISTS 4
 #define PROG_MAX_LIST 64
 #define PROG_MAX_FILL 49
+#define PROG_MAX_ASG 10
 typedef struct { char key[12]; int digit; } ProgCell;
 typedef struct {
   int solved;
@@ -40,6 +41,11 @@ typedef struct {
   int nfill;
   unsigned char fill[PROG_MAX_FILL][2];
   unsigned short fill_cp[PROG_MAX_FILL];
+  int has_asg;          /* letter -> digit ("assignment": {"Л": 3}) for Keyword Rebuses: asg_cp[k] = code point, asg_digit[k] = 0..9 */
+  int nasg;
+  int asg_bad;          /* the file's assignment had a non-digit value or more than ten letters: the module rejects the entry */
+  unsigned short asg_cp[PROG_MAX_ASG];
+  unsigned char asg_digit[PROG_MAX_ASG];
 } ProgEntry;
 
 typedef struct Module {
