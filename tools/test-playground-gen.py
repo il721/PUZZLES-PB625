@@ -118,7 +118,7 @@ put('pg-swap-%s.script' % tag, ['size %d %d' % (W, H), 'show', 'tapl Puzzle game
     'tapl Undo', 'expect Moves: 0', 'quit'])
 
 # --- Russian and German: the first moves, a tile game, the solved message
-LANG = {'ru': dict(tile='Головоломки-игры', title='Восемь фишек', goal='Цель', hint='Нажмите фишку', moves='Ходов: 1', solved='Решено за 28 ходов!', opt='Это минимум!',
+LANG = {'ru': dict(tile='Головоломки-игры', title='Восемь фишек', goal='Цель', hint='Нажмите фишку', moves='Ходов: 1', solved='Решено за 28 ходов!', opt='минимум!',
                    tiles='Выложено: 1 из 9', g3='Всюду по три', rot='Повернуть', tray='В набор', lst='Выберите игру', st='Список', rules='Фишки 1–8',
                    undo='Отмена', done='решена', best='Рекорд', pick='Сначала выберите'),
         'de': dict(tile='Denkspiele', title='Acht Chips', goal='Ziel', hint='Stein antippen', moves='Züge: 1', solved='Gelöst in 28 Zügen!', opt='Minimum!',

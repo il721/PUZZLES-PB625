@@ -330,6 +330,43 @@ static void layout_tiles_portrait(int ax, int ay, int aw, int ah) {
   }
 }
 
+/* node centres and radius of the graph game inside the board area (bx0, by0, bw0, bh0) */
+static void place_graph(void) {
+  int sz = bw0 < bh0 ? bw0 : bh0, L = pg_lattice(cur), i, ox, oy, inset, span;
+  if (cur == PG_EIGHT) nr = sz / 13;
+  else if (cur == PG_CATS) nr = (sz - 8) * 46 / 492;
+  else nr = (sz - 8) / 18;
+  inset = nr + 4;
+  span = sz - 2 * inset;
+  ox = bx0 + (bw0 - sz) / 2;
+  oy = by0 + (bh0 - sz) / 2;
+  for (i = 0; i < pg_nnodes(cur); i++) {
+    int x, y;
+    pg_node_xy(cur, i, &x, &y);
+    nx[i] = ox + inset + span * x / L;
+    ny[i] = oy + inset + span * y / L;
+  }
+}
+
+/* the goal picture (gp_x, gp_y, gp_sz) touches no node and no line of the star */
+static int goal_clear(void) {
+  int x0 = gp_x - 4, y0 = gp_y - 4, x1 = gp_x + gp_sz + 4, y1 = gp_y + gp_sz + 4, i, l, k, t;
+  for (i = 0; i < pg_nnodes(cur); i++) {
+    int dx = nx[i] < x0 ? x0 - nx[i] : nx[i] > x1 ? nx[i] - x1 : 0, dy = ny[i] < y0 ? y0 - ny[i] : ny[i] > y1 ? ny[i] - y1 : 0;
+    if (dx * dx + dy * dy < (nr + 6) * (nr + 6)) return 0;
+  }
+  for (l = 0; l < pg_nlines(cur); l++) {
+    const unsigned char *nd;
+    int len = pg_line(cur, l, &nd);
+    for (k = 0; k + 1 < len; k++)
+      for (t = 0; t <= 40; t++) {
+        int x = nx[nd[k]] + (nx[nd[k + 1]] - nx[nd[k]]) * t / 40, y = ny[nd[k]] + (ny[nd[k + 1]] - ny[nd[k]]) * t / 40;
+        if (x >= x0 && x <= x1 && y >= y0 && y <= y1) return 0;
+      }
+  }
+  return 1;
+}
+
 static void layout(int W, int H) {
   int m = 8, gap = 6, tb = 58;
   int kind = pg_kind(cur), top = tb + 6;
@@ -359,36 +396,34 @@ static void layout(int W, int H) {
     st_h = lh * (kind == PGK_TILES ? 4 : 3) + 6;
     st_w = W - 2 * m;
     st_x = m;
-    if (cur == PG_EIGHT) { /* the goal picture bottom left, the text to its right */
-      gp_on = 1;
-      gp_sz = 126;
-      if (st_h < gp_sz) st_h = gp_sz;
-      gp_x = m;
-      gp_y = ctrl_top - gap - gp_sz;
-      st_x = m + gp_sz + gap;
-      st_w = W - m - st_x;
-      st_h = gp_sz;
-    }
     st_y = ctrl_top - gap - st_h;
     bx0 = m; by0 = top; bw0 = W - 2 * m; bh0 = st_y - gap - top;
     if (kind == PGK_TILES) layout_tiles_portrait(bx0, by0, bw0, bh0);
+    if (cur == PG_EIGHT) {
+      /* the goal picture bottom left, as large as it can be without touching the star (it may reach into the empty corner
+       * beside the star's lower tips); the status text sits to its right, centred vertically on the picture, below the star */
+      int bottom = ctrl_top - gap, ht = lh * 4 + 6, g, fallback = 0;
+      gp_on = 1;
+      for (g = 300; g >= 112; g -= 2) {
+        int side = bottom - top - g / 2 - ht / 2 - gap;
+        if (side > W - 2 * m) side = W - 2 * m;
+        if (side < 420 && g > 112) continue;
+        bx0 = m; by0 = top; bw0 = W - 2 * m; bh0 = side;
+        place_graph();
+        gp_sz = g; gp_x = m; gp_y = bottom - g;
+        if (goal_clear()) break;
+        fallback = g;
+      }
+      (void)fallback;
+      st_x = gp_x + gp_sz + gap;
+      st_w = W - m - st_x;
+      st_h = ht;
+      st_y = bottom - gp_sz / 2 - ht / 2;
+    }
   }
   /* the board geometry of the current game inside (bx0, by0, bw0, bh0) */
   if (kind == PGK_GRAPH) {
-    int sz = bw0 < bh0 ? bw0 : bh0, L = pg_lattice(cur), i, ox, oy, inset, span;
-    if (cur == PG_EIGHT) nr = sz / 13;
-    else if (cur == PG_CATS) nr = (sz - 8) * 46 / 492;
-    else nr = (sz - 8) / 18;
-    inset = nr + 4;
-    span = sz - 2 * inset;
-    ox = bx0 + (bw0 - sz) / 2;
-    oy = by0 + (bh0 - sz) / 2;
-    for (i = 0; i < pg_nnodes(cur); i++) {
-      int x, y;
-      pg_node_xy(cur, i, &x, &y);
-      nx[i] = ox + inset + span * x / L;
-      ny[i] = oy + inset + span * y / L;
-    }
+    place_graph();
   } else if (kind == PGK_BLOCKS) {
     scs = bh0 / PG_SW_ROWS;
     if (scs > bw0 / PG_SW_COLS) scs = bw0 / PG_SW_COLS;
@@ -432,19 +467,17 @@ static void draw_graph(const PgState *s) {
 
 /* the goal of Eight chips as a small picture: chip t where chip 9-t stood, the centre free */
 static void draw_goal(void) {
-  int i, lab = ui_f_tiny->height + 2, box = gp_sz, cr = box / 11, size = box - lab - 2 * (cr + 3);
+  int i, lab = ui_f_tiny->height + 2, box = gp_sz, cr = box / 9, size = box - lab - 2 * (cr + 3);
   int ox = gp_x + cr + 3, oy = gp_y + lab + cr + 3;
   char t[4] = {0, 0, 0, 0};
   {
     static int mini_size;
     if (!f_mini || mini_size != cr) {
       if (f_mini) CloseFont(f_mini);
-      f_mini = ui_open_font("LiberationSans-Bold", cr * 12 / 10 < 12 ? 12 : cr * 12 / 10);
+      f_mini = ui_open_font("LiberationSans-Bold", cr * 13 / 10 < 12 ? 12 : cr * 13 / 10);
       mini_size = cr;
     }
   }
-  FillArea(gp_x, gp_y, box, box, WHITE);
-  frame(gp_x, gp_y, box, box, 2, BLACK);
   ui_text_center(ui_f_tiny, BLACK, gp_x, gp_y + 2, box, lab, tr(&S_GOAL));
   for (i = 0; i < 9; i++) {
     int x, y, cx, cy;
