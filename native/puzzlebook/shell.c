@@ -245,6 +245,7 @@ static int shell_handler(int type, int par1, int par2) {
       else home_tap(par1, par2);
       break;
     case EVT_KEYPRESS:
+      ui_log("key %d", par1, 0, 0);
       if (active) active->event(type, par1, par2);
       else if (par1 == KEY_BACK) {
         if (home_mode != HM_HOME) { home_mode = HM_HOME; redraw_home(1); }

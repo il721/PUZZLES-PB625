@@ -14,6 +14,7 @@
 #define KEY_MENU 0x17
 #define KEY_PREV 0x18
 #define KEY_NEXT 0x19
+#define KEY_HOME 0x1a
 #define KEY_BACK 0x1b
 
 #define BLACK 0x000000

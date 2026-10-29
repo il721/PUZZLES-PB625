@@ -55,7 +55,9 @@ def solve_script(W, H, tag):
           'tapl Check', 'expect broken', 'svg %s/%s-errors.svg' % (OUT, tag),
           'tapl Reset', 'expect Tap Reset again', 'tapl Reset', 'tapl Check', 'expect No mistakes',
           # back to the shell: counts, random puzzle (only p15 is unsolved), help, Back key closes the app
-          'tapl Home', 'expect 14 / 15 solved', 'tapl Random', 'expect Puzzle 15/15', 'tapl Home',
+          'tapl Home', 'expect 14 / 15 solved', 'tapl Random', 'expect Puzzle 15/15',
+          # hardware Home/Menu key: from the puzzle, from the list and from the help straight to the home screen
+          'key 23', 'expect 14 / 15 solved', 'tapl Random', 'tapl List', 'key 23', 'expect 14 / 15 solved', 'tapl Random', 'tapl ?', 'key 26', 'expect 14 / 15 solved', 'tapl Random', 'tapl Home',
           'tapl ?', 'expect Puzzle Book - help', 'tap 300 400', 'expect Random', 'key 27', 'expect_closed']
     return '\n'.join(L) + '\n'
 

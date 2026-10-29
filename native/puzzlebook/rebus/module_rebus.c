@@ -495,8 +495,9 @@ static int rebus_event(int type, int par1, int par2) {
       if (par1 == KEY_BACK) {
         if (mode != M_PLAY) { mode = M_PLAY; redraw(1); }
         else shell_leave();
-      } else if (par1 == KEY_MENU) {
-        mode = (mode == M_LIST) ? M_PLAY : M_LIST; redraw(1);
+      } else if (par1 == KEY_HOME || par1 == KEY_MENU) {
+        /* the reader's hardware button: straight back to the home screen from any screen of the module */
+        shell_leave();
       } else if (par1 == KEY_PREV && mode == M_PLAY) {
         open_puzzle(cur - 1); redraw(1);
       } else if (par1 == KEY_NEXT && mode == M_PLAY) {
