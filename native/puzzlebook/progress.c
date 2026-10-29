@@ -121,9 +121,18 @@ static int jfind(int obj, const char *name) {
 
 static void put_entry(FILE *f, const char *id, const ProgEntry *e, int last) {
   int k;
-  fprintf(f, "          \"%s\": {\n            \"cells\": {", id);
-  for (k = 0; k < e->ncells; k++) fprintf(f, "%s\"%s\": %d", k ? ", " : "", e->cells[k].key, e->cells[k].digit);
-  fprintf(f, "},\n            \"elapsedMs\": 0,\n            \"checks\": 0,\n            \"solved\": %s", e->solved ? "true" : "false");
+  fprintf(f, "          \"%s\": {\n", id);
+  if (e->ndom > 0) {
+    fprintf(f, "            \"placed\": [");
+    for (k = 0; k < e->ndom; k++)
+      fprintf(f, "%s[[%d, %d], [%d, %d]]", k ? ", " : "", e->dom[k][0], e->dom[k][1], e->dom[k][2], e->dom[k][3]);
+    fprintf(f, "]");
+  } else {
+    fprintf(f, "            \"cells\": {");
+    for (k = 0; k < e->ncells; k++) fprintf(f, "%s\"%s\": %d", k ? ", " : "", e->cells[k].key, e->cells[k].digit);
+    fprintf(f, "}");
+  }
+  fprintf(f, ",\n            \"elapsedMs\": 0,\n            \"checks\": 0,\n            \"solved\": %s", e->solved ? "true" : "false");
   if (e->updated_at > 0) fprintf(f, ",\n            \"updatedAt\": %lld", e->updated_at);
   fprintf(f, "\n          }%s\n", last ? "" : ",");
 }
@@ -142,10 +151,11 @@ int progress_export(void) {
     int i, n = 0, count, touched[64], nt = 0;
     if (!mod->ns || !mod->prog_count) continue;
     count = mod->prog_count();
-    for (i = 0; i < count && nt < 64; i++) if (mod->prog_get(i, &e)) touched[nt++] = i;
+    for (i = 0; i < count && nt < 64; i++) { memset(&e, 0, sizeof e); if (mod->prog_get(i, &e)) touched[nt++] = i; }
     fprintf(f, "%s    \"%s\": {\n      \"puzzles\": {\n", first_ns ? "" : ",\n", mod->ns);
     first_ns = 0;
     for (n = 0; n < nt; n++) {
+      memset(&e, 0, sizeof e);
       mod->prog_get(touched[n], &e);
       put_entry(f, mod->prog_id(touched[n]), &e, n == nt - 1);
     }
@@ -201,7 +211,7 @@ static int incoming_wins(const ProgEntry *loc, const ProgEntry *in) {
 }
 
 static int read_entry(int node, ProgEntry *e) {
-  int s = jfind(node, "solved"), u = jfind(node, "updatedAt"), c = jfind(node, "cells"), k;
+  int s = jfind(node, "solved"), u = jfind(node, "updatedAt"), c = jfind(node, "cells"), pl = jfind(node, "placed"), k;
   memset(e, 0, sizeof *e);
   if (pool[node].type != J_OBJ) return 0;
   e->solved = (s >= 0 && pool[s].type == J_BOOL && pool[s].num) ? 1 : 0;
@@ -215,7 +225,22 @@ static int read_entry(int node, ProgEntry *e) {
       pc->digit = (int)pool[k].num;
       e->ncells++;
     }
-  return e->solved || e->ncells > 0; /* an entry with nothing in it is not progress */
+  /* "placed": [[[r,c],[r,c]], ...]; entries that are not two number pairs are skipped (the module validates the cells) */
+  if (pl >= 0 && pool[pl].type == J_ARR)
+    for (k = pool[pl].child; k >= 0 && e->ndom < PROG_MAX_DOMS; k = pool[k].next) {
+      int a, b, v[4], n = 0, ok = pool[k].type == J_ARR;
+      for (a = ok ? pool[k].child : -1; a >= 0 && ok; a = pool[a].next) {
+        if (pool[a].type != J_ARR) { ok = 0; break; }
+        for (b = pool[a].child; b >= 0; b = pool[b].next) {
+          if (pool[b].type != J_NUM || n >= 4 || pool[b].num < 0 || pool[b].num > 255) { ok = 0; break; }
+          v[n++] = (int)pool[b].num;
+        }
+      }
+      if (!ok || n != 4) continue;
+      for (a = 0; a < 4; a++) e->dom[e->ndom][a] = (unsigned char)v[a];
+      e->ndom++;
+    }
+  return e->solved || e->ncells > 0 || e->ndom > 0; /* an entry with nothing in it is not progress */
 }
 
 void progress_apply(int *added, int *updated) {
@@ -234,6 +259,7 @@ void progress_apply(int *added, int *updated) {
     for (i = 0; i < count; i++) {
       int en = jfind(puzzles, mod->prog_id(i));
       if (en < 0 || !read_entry(en, &in)) continue;
+      memset(&loc, 0, sizeof loc);
       if (!mod->prog_get(i, &loc)) { mod->prog_put(i, &in); (*added)++; }
       else if (incoming_wins(&loc, &in)) { mod->prog_put(i, &in); (*updated)++; }
     }

@@ -26,9 +26,9 @@ gcc "$T/shim.o" "$T2"/*.o -o "$T/ui2"
 
 # third variant: the real registry (modules.c): Square Rebuses + Digit Rebuses
 T3="$T/full"; mkdir -p "$T3"
-for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/digit/module_digit.c $N/digit/digit_core.c; do
-  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DDIGITSAVEF="\"$T/digit.sav\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" -DPROGF="\"$T/progress.json\"" \
-    -Itools/fake-inkview -I$N -I$N/rebus -I$N/digit -c $f -o "$T3/$(basename $f .c).o"
+for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/digit/module_digit.c $N/digit/digit_core.c $N/domino/module_domino.c $N/domino/domino_core.c; do
+  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DDIGITSAVEF="\"$T/digit.sav\"" -DDOMINOSAVEF="\"$T/domino.sav\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" -DPROGF="\"$T/progress.json\"" \
+    -Itools/fake-inkview -I$N -I$N/rebus -I$N/digit -I$N/domino -c $f -o "$T3/$(basename $f .c).o"
 done
 gcc "$T/shim.o" "$T3"/*.o -o "$T/ui3"
 
@@ -159,20 +159,20 @@ def script(W, H, tag):
           'tapl ?', 'expect How to play', 'svg %s/%s-digit-help.svg' % (OUT, tag), 'key 27', 'expect Example',
           # Home key and the list's Home button lead to the shell; counts there
           'key 23', 'expect 18 / 18 solved', 'expect 0 / 15 solved', 'tapl Digit Rebuses', 'tapl List', 'tapl Home', 'expect 18 / 18 solved',
-          'tapl Random', 'expect Puzzle ', 'key 26', 'expect 18 / 18 solved', 'key 27', 'expect_closed']
+          'tapl Random', 'expect /1', 'key 26', 'expect 18 / 18 solved', 'key 27', 'expect_closed']
     return '\n'.join(L) + '\n'
 
 for W, H, tag in ((600, 800, 'portrait'), (800, 600, 'landscape')):
     open('%s/digit-%s.script' % (T, tag), 'w').write(script(W, H, tag))
 PY
 for tag in portrait landscape; do
-  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/cfg" "$T/global.cfg"
+  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/cfg" "$T/global.cfg"
   if REBUS_SCRIPT="$T/digit-$tag.script" "$T/ui3"; then echo "PASS digit rebuses $tag"; else echo "FAIL digit rebuses $tag"; RC=1; fi
 done
 grep -c '^1 ' "$T/digit.sav" | sed 's/^/digit puzzles saved solved: /'
 # Digit Rebuses in Russian and German (cells, pad, messages, list, help)
 for lg in ru de; do
-  rm -f "$T/digit.sav" "$T/rebus.sav"; printf 'lang=%s\n' $lg > "$T/cfg"
+  rm -f "$T/digit.sav" "$T/rebus.sav" "$T/domino.sav"; printf 'lang=%s\n' $lg > "$T/cfg"
   if [ $lg = ru ]; then TILE="Цифровые ребусы"; T1="Ребус 1/18"; CH="Проверить"; OKM="Ошибок нет"; LS="Выберите ребус"; HP="Как играть"; HM="Домой"; SOL="Решено!"; LST="Список"; else TILE="Ziffernrebusse"; T1="Rätsel 1/18"; CH="Prüfen"; OKM="Keine Fehler"; LS="Rätsel wählen"; HP="Spielregeln"; HM="Start"; SOL="Gelöst!"; LST="Liste"; fi
   python3 - "$T" "$lg" "$TILE" "$T1" "$CH" "$OKM" "$LS" "$HP" "$HM" "$SOL" "$LST" <<'PY'
 import json, sys
@@ -189,9 +189,191 @@ PY
 done
 rm -f "$T/cfg" "$T/digit.sav"
 
+# ---- Domino Solitaire (third real module, real registry): solve all 19 puzzles by tapping cells, portrait and landscape
+python3 - "$T" "$OUT" <<'PY'
+import json, sys
+T, OUT = sys.argv[1:3]
+data = json.load(open('native/puzzlebook/domino/module03.json'))['puzzles']
+
+def solve(grid):
+    cov = [[False] * 7 for _ in range(8)]
+    used, placed, found = set(), [], []
+    def rec():
+        if len(found) > 1: return
+        for r in range(8):
+            for c in range(7):
+                if not cov[r][c]:
+                    for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                        nr, nc = r + dr, c + dc
+                        if 0 <= nr < 8 and 0 <= nc < 7 and not cov[nr][nc]:
+                            k = tuple(sorted((grid[r][c], grid[nr][nc])))
+                            if k in used: continue
+                            cov[r][c] = cov[nr][nc] = True; used.add(k); placed.append((r, c, nr, nc))
+                            rec()
+                            placed.pop(); used.discard(k); cov[r][c] = cov[nr][nc] = False
+                    return
+        found.append(list(placed))
+    rec()
+    assert len(found) == 1, 'puzzle must have exactly one solution'
+    return found[0]
+
+SOL = [solve(p['grid']) for p in data]
+json.dump(SOL, open(T + '/domino-solutions.json', 'w'))
+
+def tap(r, c): return 'tapd %d' % (r * 7 + c)
+
+def script(W, H, tag):
+    L = ['size %d %d' % (W, H), 'show', 'expect 0 / 18 solved', 'expect Domino Solitaire', 'tapl Domino Solitaire', 'expect Domino 1/18',
+         'expect 0:0', 'expect 6:6', 'expect Placed: 0 of 28', 'svg %s/%s-domino-start.svg' % (OUT, tag)]
+    order = list(range(1, len(data))) + [0]
+    for n, i in enumerate(order):
+        for k, (r1, c1, r2, c2) in enumerate(SOL[i]):
+            L += [tap(r1, c1), tap(r2, c2)]
+            if i == 4 and k == 13: L += ['expect Placed: 14 of 28', 'svg %s/%s-domino-half.svg' % (OUT, tag)]
+        L += ['expect Placed: 28 of 28', 'expect Solved!']
+        if i == 4: L.append('svg %s/%s-domino-solved.svg' % (OUT, tag))
+        if n < len(order) - 1: L.append('tapl >')
+    # now on the Example (solved): selection, a duplicate pair, removing it, Reset
+    L += ['tapl Reset', 'expect Tap Reset again', 'tapl Reset', 'expect Placed: 0 of 28', 'expect_not Solved!']
+    g = data[0]['grid']
+    # example grid: (0,4)-(0,5) and (1,0)-(0,0) are both 0:0; (0,0)-(0,1) is 0:6
+    assert g[0][4] == g[0][5] == g[0][0] == g[1][0] == 0
+    L += [tap(0, 4), 'svg %s/%s-domino-pending.svg' % (OUT, tag), tap(0, 5), 'expect Placed: 1 of 28', 'expect_not duplicated',
+          tap(0, 0), tap(1, 0), 'expect Placed: 2 of 28', 'expect duplicated', 'svg %s/%s-domino-dup.svg' % (OUT, tag),
+          tap(0, 0), 'expect Placed: 1 of 28', 'expect_not duplicated',
+          tap(5, 5), tap(0, 1), 'svg %s/%s-domino-moved.svg' % (OUT, tag), tap(5, 5), tap(5, 5), tap(7, 6), tap(7, 6),   # far apart: selection moves, deselects
+          'expect Placed: 1 of 28',
+          'tapl List', 'expect Domino Solitaire - choose a puzzle', 'svg %s/%s-domino-list.svg' % (OUT, tag), 'tapl Back',
+          'tapl ?', 'expect How to play', 'svg %s/%s-domino-help.svg' % (OUT, tag), 'key 27', 'expect Example',
+          'key 23', 'expect 18 / 18 solved', 'expect 0 / 15 solved', 'tapl Domino Solitaire', 'tapl List', 'tapl Home', 'expect 18 / 18 solved',
+          'tapl Domino Solitaire', 'tapl Home', 'expect 18 / 18 solved', 'key 27', 'expect_closed']
+    return '\n'.join(L) + '\n'
+
+for W, H, tag in ((600, 800, 'portrait'), (800, 600, 'landscape')):
+    open('%s/domino-%s.script' % (T, tag), 'w').write(script(W, H, tag))
+PY
+for tag in portrait landscape; do
+  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/cfg" "$T/global.cfg"
+  if REBUS_SCRIPT="$T/domino-$tag.script" "$T/ui3"; then echo "PASS domino solitaire $tag"; else echo "FAIL domino solitaire $tag"; RC=1; fi
+done
+# the save file: 19 puzzle lines, 18 solved, the sample not solved after its Reset; saved boards reload through the app
+python3 - "$T/domino.sav" "$T/domino-solutions.json" <<'PY' || { echo "FAIL domino save file"; RC=1; }
+import json, sys
+lines = open(sys.argv[1]).read().split('\n')
+sol = json.load(open(sys.argv[2]))
+assert lines[0].startswith('v1 ')
+rows = [l.split() for l in lines[1:20]]
+assert len(rows) == 19 and sum(r[0] == '1' for r in rows) == 18 and rows[0][0] == '0'
+for i in range(1, 19):
+    s = rows[i][1]
+    assert len(s) == 56 and s.count('R') + s.count('D') == 28, s
+    want = ['.'] * 56
+    for (r1, c1, r2, c2) in sol[i]:
+        a, b = sorted((r1 * 7 + c1, r2 * 7 + c2))
+        want[a] = 'R' if b == a + 1 else 'D'
+    assert ''.join(want) == s, (i, s)
+assert rows[0][1].count('R') + rows[0][1].count('D') == 1 and int(rows[1][2]) > 1700000000000
+print('PASS domino save file')
+PY
+# Domino Solitaire in Russian and German
+for lg in ru de; do
+  rm -f "$T/domino.sav" "$T/rebus.sav" "$T/digit.sav"; printf 'lang=%s\n' $lg > "$T/cfg"
+  if [ $lg = ru ]; then TILE="Домино-пасьянс"; T1="Домино 1/18"; PL="Выставлено: 2 из 28"; DUP="повторяющиеся"; RS="Сбросить"; RS2="ещё раз"; LS="Выберите головоломку"; HP="Как играть"; HM="Домой"; SOL="Решено!"; LST="Список"; else TILE="Domino-Patience"; T1="Domino 1/18"; PL="Gelegt: 2 von 28"; DUP="doppelt"; RS="Reset"; RS2="Noch einmal"; LS="Rätsel wählen"; HP="Spielregeln"; HM="Start"; SOL="Gelöst!"; LST="Liste"; fi
+  python3 - "$T" "$lg" "$TILE" "$T1" "$PL" "$DUP" "$RS" "$RS2" "$LS" "$HP" "$HM" "$SOL" "$LST" <<'PY'
+import json, sys
+T, lg, TILE, T1, PL, DUP, RS, RS2, LS, HP, HM, SOL, LST = sys.argv[1:]
+SOL_ = json.load(open(T + '/domino-solutions.json'))
+g = json.load(open('native/puzzlebook/domino/module03.json'))['puzzles'][1]['grid']
+# p01: two dominoes with the same pair
+pos = {}
+pair = None
+for r in range(8):
+    for c in range(7):
+        for dr, dc in ((0, 1), (1, 0)):
+            if r + dr < 8 and c + dc < 7:
+                k = tuple(sorted((g[r][c], g[r + dr][c + dc])))
+                pos.setdefault(k, []).append((r, c, r + dr, c + dc))
+two = None
+for k, v in pos.items():
+    for a in v:
+        for b in v:
+            if a < b and not ({(a[0], a[1]), (a[2], a[3])} & {(b[0], b[1]), (b[2], b[3])}): two = (a, b)
+    if two: break
+def tap(r, c): return 'tapd %d' % (r * 7 + c)
+L = ['size 600 800', 'show', 'tapl ' + TILE, 'expect ' + T1, tap(two[0][0], two[0][1]), tap(two[0][2], two[0][3]), tap(two[1][0], two[1][1]), tap(two[1][2], two[1][3]),
+     'expect ' + PL, 'expect ' + DUP, 'tapl ' + RS, 'expect ' + RS2, 'tapl ' + RS, 'tapl ?', 'expect ' + HP, 'tap 300 400',
+     'tapl ' + LST, 'expect ' + LS, 'tapl ' + HM, 'expect ' + TILE, 'tapl ' + TILE]
+for (r1, c1, r2, c2) in SOL_[1]: L += [tap(r1, c1), tap(r2, c2)]
+L += ['expect ' + SOL, 'quit']
+open('%s/domino-%s.script' % (T, lg), 'w').write('\n'.join(L) + '\n')
+PY
+  if REBUS_SCRIPT="$T/domino-$lg.script" "$T/ui3"; then echo "PASS domino solitaire $lg"; else echo "FAIL domino solitaire $lg"; RC=1; fi
+done
+rm -f "$T/cfg" "$T/domino.sav"
+
+# ---- Domino Solitaire progress: "placed" lists in the progress file, both ways, invalid dominoes skipped
+P="$T/progress.json"
+rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/cfg" "$P"
+python3 - "$T" <<'PY'
+import json, sys
+T = sys.argv[1]
+SOL = json.load(open(T + '/domino-solutions.json'))
+def tap(r, c): return 'tapd %d' % (r * 7 + c)
+L = ['size 600 800', 'show', 'tapl Domino Solitaire']
+for (r1, c1, r2, c2) in SOL[1]: L += [tap(r1, c1), tap(r2, c2)]
+r1, c1, r2, c2 = SOL[2][0]
+L += ['expect Solved!', 'tapl >', tap(r1, c1), tap(r2, c2), 'expect Placed: 1 of 28', 'tapl Home', 'tapl Settings', 'tapl Save progress to a file', 'expect Progress saved.', 'quit']
+open(T + '/dprog-export.script', 'w').write('\n'.join(L) + '\n')
+open(T + '/dprog-import.script', 'w').write('\n'.join([
+  'size 600 800', 'show', 'tapl Settings', 'tapl Load progress from a file', 'tapl Load', 'expect Puzzles added: 2, updated: 0.', 'tapl Back',
+  'expect 1 / 18 solved', 'tapl Domino Solitaire', 'expect Domino 1/18', 'expect Placed: 28 of 28', 'tapl >', 'expect Domino 2/18', 'expect Placed: 1 of 28', 'quit']) + '\n')
+PY
+if REBUS_SCRIPT="$T/dprog-export.script" "$T/ui3"; then echo "PASS domino progress export"; else echo "FAIL domino progress export"; RC=1; fi
+python3 - "$P" "$T/domino-solutions.json" <<'PY' || { echo "FAIL domino progress file content"; RC=1; }
+import json, sys
+b = json.load(open(sys.argv[1]))
+sol = json.load(open(sys.argv[2]))
+d = b['namespaces']['module_domino']['puzzles']
+assert list(d) == ['p01', 'p02'], list(d)
+assert d['p01']['solved'] is True and len(d['p01']['placed']) == 28 and 'cells' not in d['p01']
+want = sorted([[r1, c1], [r2, c2]] for (r1, c1, r2, c2) in sol[1])
+assert sorted(sorted(x) for x in d['p01']['placed']) == sorted(sorted(x) for x in want)
+assert d['p02']['solved'] is False and len(d['p02']['placed']) == 1 and d['p02']['updatedAt'] > 1700000000000
+assert d['p02']['elapsedMs'] == 0 and d['p02']['checks'] == 0
+assert b['namespaces']['module_rebus']['puzzles'] == {} or 'module_rebus' in b['namespaces']
+print('PASS domino progress file content')
+PY
+rm -f "$T/domino.sav"
+if REBUS_SCRIPT="$T/dprog-import.script" "$T/ui3"; then echo "PASS domino progress import"; else echo "FAIL domino progress import"; RC=1; fi
+# a bundle in the app's own shape: overlapping, non-adjacent, out-of-range and malformed dominoes are skipped, the rest kept
+python3 - "$T" <<'PY'
+import json, sys
+T = sys.argv[1]
+B = {'bundleVersion': 1, 'namespaces': {'module_domino': {'puzzles': {
+  'p03': {'placed': [[[0, 0], [0, 1]], [[0, 1], [0, 2]], [[5, 5], [6, 6]], [[7, 6], [8, 6]], [[0, 5], [0, 6]], [[1, 1]], 'x', [[1, 0], [2, 0], [3, 0]]],
+          'elapsedMs': 5000, 'solved': False, 'updatedAt': 1700000000000},
+  'example': {'placed': [], 'solved': False}}}}}
+json.dump(B, open(T + '/bundle-domino.json', 'w'))
+open(T + '/dprog-merge.script', 'w').write('\n'.join(['size 600 800', 'show', 'tapl Settings', 'tapl Load progress from a file', 'tapl Load',
+  'expect Puzzles added: 1, updated: 0.', 'quit']) + '\n')
+PY
+cp "$T/bundle-domino.json" "$P"
+rm -f "$T/domino.sav"
+if REBUS_SCRIPT="$T/dprog-merge.script" "$T/ui3"; then echo "PASS domino progress app-shaped bundle"; else echo "FAIL domino progress app-shaped bundle"; RC=1; fi
+python3 - "$T/domino.sav" <<'PY' || { echo "FAIL domino merged save file"; RC=1; }
+import sys
+rows = [l.split() for l in open(sys.argv[1]).read().split('\n')[1:20]]
+p03 = rows[3]
+assert p03[0] == '0' and p03[2] == '1700000000000'
+assert p03[1].count('R') == 2 and p03[1].count('D') == 0 and p03[1][0] == 'R' and p03[1][5] == 'R', p03[1]   # (0,0)-(0,1) and (0,5)-(0,6) only
+assert all(r[1] == '.' * 56 for i, r in enumerate(rows) if i != 3)
+print('PASS domino merged save file')
+PY
+rm -f "$T/domino.sav" "$P"
+
 # ---- Settings > Transfer progress: save to a file, load it into a clean state, merge rules, bad files, ru/de
 P="$T/progress.json"
-rm -f "$T/rebus.sav" "$T/digit.sav" "$T/cfg" "$T/global.cfg" "$P"
+rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/cfg" "$T/global.cfg" "$P"
 python3 - "$T" "$OUT" <<'PY'
 import json, sys
 T, OUT = sys.argv[1:3]
@@ -222,7 +404,7 @@ assert r['p01']['updatedAt'] > 1700000000000 and d['p01']['updatedAt'] > 1700000
 assert r['p01']['elapsedMs'] == 0 and r['p01']['checks'] == 0
 print('PASS progress file content')
 PY
-rm -f "$T/rebus.sav" "$T/digit.sav"
+rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav"
 if REBUS_SCRIPT="$T/prog-import.script" "$T/ui3"; then echo "PASS progress import into a clean state"; else echo "FAIL progress import"; RC=1; fi
 python3 - "$P" "$T/rebus.sav" <<'PY' || { echo "FAIL imported stamp kept"; RC=1; }
 import json, sys
@@ -283,7 +465,7 @@ open(T + '/prog-merge2.script', 'w').write('\n'.join(['size 600 800', 'show', 't
   'tapl Load', 'expect Puzzles added: 0, updated: 2.', 'tapl Back', 'expect 3 / 15 solved', 'expect 2 / 18 solved', 'quit']) + '\n')
 PY
 # local state for the merge: rebus p01 with one digit and a fresh stamp (older than nothing: 1000 < now), digit p01 solved
-rm -f "$T/rebus.sav" "$T/digit.sav"
+rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav"
 cp "$P" "$T/export.json"
 python3 - "$T" <<'PY'
 import sys, json

@@ -5,8 +5,11 @@
  *   key K         EVT_KEYPRESS (K = number)
  *   orient N      EVT_ORIENTATION (swaps W and H when N is odd)
  *   tapl TEXT     EVT_POINTERUP at the centre of the first text drawn as exactly TEXT
+ *   tapd K        EVT_POINTERUP at the centre of the K-th (from 0) text that is a single digit, in drawing order
+ *                 (Domino Solitaire draws its 56 cell digits row by row and no other single digits)
  *   svg FILE      write the current screen
  *   expect TEXT   fail unless TEXT is drawn on the current screen
+ *   expect_not TEXT  fail if TEXT is drawn on the current screen
  *   expect_closed fail unless the app called CloseApp
  *   quit          EVT_EXIT
  * Text is approximated: width = 0.58 * size per Latin char (0.62 per other UTF-8 char), height = 1.2 * size. */
@@ -181,9 +184,18 @@ int main(void) {
         if (!strcmp(items[i].t, line + 5)) { handler(EVT_POINTERUP, items[i].cx, items[i].cy); hit = 1; }
       if (!hit) { printf("FAIL tapl: no text '%s'\n", line + 5); failed++; }
     }
+    else if (sscanf(line, "tapd %d", &a) == 1) {
+      int i, k = 0, hit = 0;
+      for (i = 0; i < nitems && !hit; i++)
+        if (items[i].t[0] >= '0' && items[i].t[0] <= '9' && !items[i].t[1] && k++ == a) { handler(EVT_POINTERUP, items[i].cx, items[i].cy); hit = 1; }
+      if (!hit) { printf("FAIL tapd: no digit item %d\n", a); failed++; }
+    }
     else if (sscanf(line, "key %d", &a) == 1) handler(EVT_KEYPRESS, a, 0);
     else if (sscanf(line, "orient %d", &a) == 1) { if (a & 1) { int t = W; W = H; H = t; } handler(EVT_ORIENTATION, a, 0); }
     else if (sscanf(line, "svg %399s", arg) == 1) write_svg(arg);
+    else if (!strncmp(line, "expect_not ", 11)) {
+      if (svg && strstr(svg, line + 11)) { printf("FAIL expect_not '%s'\n", line + 11); failed++; }
+    }
     else if (!strncmp(line, "expect ", 7)) {
       if (!svg || !strstr(svg, line + 7)) { printf("FAIL expect '%s'\n", line + 7); failed++; }
     }
