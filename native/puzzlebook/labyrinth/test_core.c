@@ -4,6 +4,7 @@
 
 #include "labyrinth_core.h"
 #include "labyrinth_data.h"
+#include "labyrinth_tutorial.h"
 
 static int fails, checks;
 #define CHECK(c) do { checks++; if (!(c)) { fails++; printf("FAIL line %d: %s\n", __LINE__, #c); } } while (0)
@@ -219,6 +220,49 @@ int main(void) {
     CHECK(lab_restore(&b2, a, 3, z, 3, NULL, 0, NULL, 0) && b2.na == 3 && b2.nz == 3);
   }
 
+  { /* the walkthrough: the nine chunks cover the printed path 0..32 once, step 3 shows twins crossed and a unique letter marked */
+    const LabPuzzle *p = &LPUZZLES[0];
+    LabBoard b;
+    LabStatus st;
+    uint8_t emph[LCELLS];
+    int step, i, next = 0, cnt, occurrences;
+    CHECK(p->tutorial && p->nsol == LPATH);
+    for (step = 0; step < LB_TUT_STEPS; step++) {
+      const LbTutStep *t = &LB_TUT[step];
+      if (t->rlo >= 0) {
+        CHECK(t->rlo == next && t->rhi >= t->rlo && t->rhi < LPATH);   /* contiguous, ascending, no gaps or repeats */
+        next = t->rhi + 1;
+      }
+      CHECK(t->hlo < 0 || (t->hlo >= 0 && t->hhi >= t->hlo && t->hhi < LPATH));
+      lb_tut_board(p, step, &b, emph);
+      lab_status(&b, &st);
+      CHECK(st.ndup == 0);
+      cnt = 0;
+      for (i = 0; i < LCELLS; i++) cnt += emph[i];
+      CHECK(cnt == (t->hlo < 0 ? 0 : t->hhi - t->hlo + 1));
+    }
+    CHECK(next == LPATH);
+    lb_tut_board(p, LB_TUT_STEPS - 1, &b, emph);
+    CHECK(lab_wins(&b));
+    {
+      int8_t path[LPATH];
+      CHECK(lab_path(&b, path) == LPATH);
+      for (i = 0; i < LPATH; i++) CHECK(path[i] == p->sol[i]);
+    }
+    lb_tut_board(p, 2, &b, emph);   /* step 3 */
+    CHECK(b.na == 1 && b.nz == 1);
+    CHECK(b.cross[LB_TUT[2].cross[0]] && b.cross[LB_TUT[2].cross[1]] && b.mark[LB_TUT[2].mark[0]]);
+    CHECK(p->letter[LB_TUT[2].cross[0]] == p->letter[LB_TUT[2].cross[1]]);   /* the twin pair */
+    for (i = 0, occurrences = 0; i < LCELLS; i++) occurrences += p->letter[i] == p->letter[LB_TUT[2].mark[0]];
+    CHECK(occurrences == 1);                                              /* the marked letter occurs only once */
+    lb_tut_board(p, 3, &b, emph);   /* step 4: cells 0..3, no crosses or marks left over */
+    CHECK(b.na == 4 && b.nz == 1 && b.cross[LB_TUT[2].cross[0]] == 0 && b.mark[LB_TUT[2].mark[0]] == 0);
+    CHECK(emph[p->sol[0]] && emph[p->sol[3]] && !emph[p->sol[4]]);
+    lb_tut_board(p, 0, &b, emph);
+    CHECK(emph[LSTART] == 1);
+    lb_tut_board(p, 1, &b, emph);
+    CHECK(emph[LEND] == 1);
+  }
   printf("%d checks, %d failed\n", checks, fails);
   return fails != 0;
 }

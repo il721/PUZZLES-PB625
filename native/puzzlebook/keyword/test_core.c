@@ -4,6 +4,7 @@
 
 #include "keyword_core.h"
 #include "keyword_data.h"
+#include "keyword_tutorial.h"
 
 static int fails, checks;
 #define CHECK(c) do { checks++; if (!(c)) { fails++; printf("FAIL line %d: %s\n", __LINE__, #c); } } while (0)
@@ -196,6 +197,42 @@ int main(void) {
     CHECK(b.val[0] == 0 && b.val[1] == 1 && b.val[2] == -1 && b.val[3] == -1 && b.val[4] == 3 && b.val[5] == -1);
     kw_load(&b, "");
     CHECK(b.val[0] == -1 && b.sel == -1);
+  }
+
+  { /* the walkthrough: the ten letters get their digits once each, no step shows a conflict or a broken equation, the last
+     * board is solved and spells the book's keyword ГИПОТЕНУЗА */
+    const KwPuzzle *p = &KPUZZLES[0];
+    KwBoard b;
+    KwStatus st;
+    uint8_t emph[3][3];
+    uint8_t seen[KW_LETTERS];
+    uint16_t word[10];
+    static const uint16_t KEYWORD[10] = {0x413, 0x418, 0x41F, 0x41E, 0x422, 0x415, 0x41D, 0x423, 0x417, 0x410};
+    int step, j, n = 0, l, r, c, cnt;
+    CHECK(p->tutorial);
+    memset(seen, 0, sizeof seen);
+    for (step = 0; step < KT_TUT_STEPS; step++) {
+      const KtTutStep *t = &KT_TUT[step];
+      CHECK(t->nrev <= 3 && t->nword <= 5);
+      for (j = 0; j < t->nrev; j++) {
+        l = kt_tut_letter(p, t->rev[j]);
+        CHECK(l >= 0 && !seen[l]);
+        if (l >= 0) seen[l] = 1;
+        n++;
+      }
+      for (j = 0; j < t->nword; j++) CHECK(t->word[j][0] >= 0 && t->word[j][0] < 3 && t->word[j][1] >= 0 && t->word[j][1] < 3);
+      kt_tut_board(p, step, &b, emph);
+      kw_status(&b, &st);
+      CHECK(st.nconflict == 0 && st.nlead0 == 0 && st.nwrong == 0 && st.set == n);
+      for (r = 0, cnt = 0; r < 3; r++) for (c = 0; c < 3; c++) cnt += emph[r][c];
+      CHECK(cnt == t->nword);
+    }
+    CHECK(n == KW_LETTERS);
+    kt_tut_board(p, KT_TUT_STEPS - 1, &b, emph);
+    CHECK(kw_wins(&b) && kw_keyword(&b, word) == 1);
+    for (j = 0; j < 10; j++) CHECK(word[j] == KEYWORD[j]);
+    kt_tut_board(p, 1, &b, emph);   /* step 2: И = 1 only, column 1 emphasised */
+    CHECK(b.val[kt_tut_letter(p, K_I)] == 1 && emph[0][0] && emph[1][0] && emph[2][0] && !emph[0][1]);
   }
 
   printf("keyword_core: %d checks, %d failed\n", checks, fails);

@@ -21,5 +21,6 @@ buttons, log), `modules.c` (registry), `rebus/` (module "Square Rebuses"), `digi
 4. Save file: `/mnt/ext1/<id>.sav` (own format; keep it a plain text file). Use `atoi`/`strtol`, not `sscanf`/`fscanf`
    (they need GLIBC_2.7; the firmware's libc may be older). Only call inkview functions already used here
    unless you check the device has them (`readelf -Ws --dyn-syms` on the binary lists what it imports).
+4b. Walkthrough (optional, for a module with a sample puzzle): add a `<name>_tutorial.h` with the step table and a function that builds the board of a step (see `rebus/rebus_tutorial.h`), a text entry per step in `tools/gen-tutorial-texts.py` (generates `tutorial_text.c`), a mode `M_GUIDE` that lays the board out above `tut_layout()`'s panel and draws it with `tut_draw()`, a `TUT_B_GUIDE` button on the list screen and `tut_next_step()` for the Back / Next / Skip buttons (`tutorial.h`).
 5. Build and test: `make -C native/puzzlebook SDK=/path/to/SDK_481`, `sh tools/test-rebus-ui.sh`
    (add a module to `tools/test-modules2.c`-style registry to play it in the host harness).

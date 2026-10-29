@@ -4,6 +4,7 @@
 
 #include "squareword_core.h"
 #include "squareword_data.h"
+#include "squareword_tutorial.h"
 
 static int fails, checks;
 #define CHECK(c) do { checks++; if (!(c)) { fails++; printf("FAIL line %d: %s\n", __LINE__, #c); } } while (0)
@@ -183,6 +184,41 @@ int main(void) {
     CHECK(st.filled == 8);    /* row 0 holds givens only */
   }
 
+  { /* the walkthrough: steps 3-11 fill exactly the 17 player cells, once each, with letters of the keyword, never a repeat,
+     * and the last board is the (unique) solution */
+    const SwPuzzle *p = &SPUZZLES[0];
+    SwBoard b;
+    SwStatus st;
+    uint8_t emph[SW_MAX][SW_MAX], seen[SW_MAX][SW_MAX];
+    int step, j, r, c, n = 0, free_cells = 0, cnt;
+    CHECK(p->tutorial && p->n == 5);
+    memset(seen, 0, sizeof seen);
+    sw_init(&b, p);
+    for (r = 0; r < 5; r++) for (c = 0; c < 5; c++) free_cells += !sw_is_given(&b, r, c);
+    for (step = 0; step < SQ_TUT_STEPS; step++) {
+      const SqTutStep *t = &SQ_TUT[step];
+      CHECK(t->nrev <= 7);
+      for (j = 0; j < t->nrev; j++) {
+        const SqRev *e = &t->rev[j];
+        CHECK(e->r >= 0 && e->r < 5 && e->c >= 0 && e->c < 5 && !sw_is_given(&b, e->r, e->c) && !seen[e->r][e->c]);
+        CHECK(sq_tut_letter(p, e->cp) >= 0);
+        seen[e->r][e->c] = 1;
+        n++;
+      }
+      sq_tut_board(p, step, &b, emph);
+      sw_status(&b, &st);
+      CHECK(st.violations == 0);
+      for (r = 0, cnt = 0; r < 5; r++) for (c = 0; c < 5; c++) cnt += emph[r][c];
+      CHECK(cnt == t->nrev);
+    }
+    CHECK(n == free_cells && n == 17);
+    sq_tut_board(p, SQ_TUT_STEPS - 1, &b, emph);
+    CHECK(sw_wins(&b));
+    sq_tut_board(p, 2, &b, emph);   /* step 3: only d1 = Л so far */
+    CHECK(b.cell[4][3] == sq_tut_letter(p, L_L) && emph[4][3]);
+    sw_status(&b, &st);
+    CHECK(st.filled == 8 + 1);
+  }
   printf("%d checks, %d failures\n", checks, fails);
   return fails ? 1 : 0;
 }

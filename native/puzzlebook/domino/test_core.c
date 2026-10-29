@@ -4,6 +4,7 @@
 
 #include "domino_core.h"
 #include "domino_data.h"
+#include "domino_tutorial.h"
 
 static int fails, checks;
 #define CHECK(c) do { checks++; if (!(c)) { fails++; printf("FAIL line %d: %s\n", __LINE__, #c); } } while (0)
@@ -168,6 +169,36 @@ int main(void) {
     CHECK(st.placed == 24 && st.covered == 48); /* 3 per row of 7 cells */
   }
 
+  { /* the walkthrough: the steps place the 28 dominoes of the printed solution, each exactly once, and the last board wins */
+    const DomPuzzle *p = &DPUZZLES[0];
+    DomBoard b;
+    DomStatus st;
+    uint8_t emph[DCELLS], seen[DDOMS];
+    int step, j, n = 0, cnt, e;
+    CHECK(p->tutorial && p->nsol == DDOMS);
+    memset(seen, 0, sizeof seen);
+    for (step = 0; step < DM_TUT_STEPS; step++) {
+      const DmTutStep *t = &DM_TUT[step];
+      CHECK(t->nrev <= 5);
+      for (j = 0; j < t->nrev; j++) {
+        CHECK(t->rev[j] >= 0 && t->rev[j] < DDOMS && !seen[(int)t->rev[j]]);
+        seen[(int)t->rev[j]] = 1;
+        n++;
+      }
+      dm_tut_board(p, step, &b, emph);
+      dom_status(&b, &st);
+      CHECK(st.placed == n && st.nconflicts == 0);   /* every domino of the step was accepted, none twice */
+      for (e = 0, cnt = 0; e < DCELLS; e++) cnt += emph[e];
+      CHECK(cnt == 2 * t->nrev);
+      for (e = 0; e < DCELLS; e++) CHECK(!emph[e] || b.partner[e] >= 0);
+    }
+    CHECK(n == DDOMS);
+    dm_tut_board(p, DM_TUT_STEPS - 1, &b, emph);
+    CHECK(dom_wins(&b));
+    dm_tut_board(p, 1, &b, emph);                      /* step 2: nothing placed yet */
+    dom_status(&b, &st);
+    CHECK(st.placed == 0);
+  }
   printf("%d checks, %d failed\n", checks, fails);
   return fails != 0;
 }

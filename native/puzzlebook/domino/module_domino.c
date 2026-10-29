@@ -9,15 +9,17 @@
 #include <string.h>
 
 #include "../shell.h"
+#include "../tutorial.h"
 #include "domino_core.h"
 #include "domino_data.h"
+#include "domino_tutorial.h"
 
 #ifndef DOMINOSAVEF
 #define DOMINOSAVEF "/mnt/ext1/domino.sav"
 #endif
 
 enum { B_RESET = 10, B_PREV, B_NEXT, B_LIST, B_HELP, B_HOME, B_CLOSE };
-enum { M_PLAY, M_LIST, M_HELP };
+enum { M_PLAY, M_LIST, M_HELP, M_GUIDE };
 
 typedef UiBtn Btn;
 
@@ -27,6 +29,10 @@ static long long stamp[DNUM_PUZZLES]; /* ms since 1970 of the last change to eac
 static int cur = 1, mode = M_PLAY;
 static int reset_armed, updates;
 static char msg[200];
+static DomBoard gboard;             /* the walkthrough board, rebuilt for every redraw; never saved */
+static uint8_t gemph[DCELLS];       /* cells of the dominoes the step has just placed */
+static int gstep;                  /* guided walkthrough (mode M_GUIDE): the step, 0-based */
+static TutPanel gpanel;
 static int left; /* set when the module handed control back to the shell */
 
 static Btn btns[32];
@@ -150,10 +156,34 @@ static void add_btn(int x, int y, int w, int h, int id, const char *label) {
   b->x = x; b->y = y; b->w = w; b->h = h; b->id = id; b->label = label;
 }
 
+/* walkthrough: the board and the 28 pairs on top, a counter line, the step text and its buttons below (tutorial.h) */
+static void guide_layout(int W, int H) {
+  int i, m = 8, gap = 6, pw, area, avail;
+  nbtn = 0;
+  tut_layout(TUT_DOMINO, gstep, W, H, &gpanel);
+  for (i = 0; i < gpanel.nbtn; i++) add_btn(gpanel.btn[i].x, gpanel.btn[i].y, gpanel.btn[i].w, gpanel.btn[i].h, gpanel.btn[i].id, gpanel.btn[i].label);
+  chip_gap = 4;
+  chip_cols = 2;
+  chip_w = W / 12;
+  pw = 2 * chip_w + chip_gap;
+  gy = 62;
+  cs = (W - 2 * m - gap - pw) / 7;
+  avail = gpanel.top - 4 - 30 - gy;
+  if (avail / 8 < cs) cs = avail / 8;
+  area = W - m - pw - gap - m;
+  gx = m + (area - 7 * cs) / 2;
+  chip_x = W - m - pw;
+  chip_y = gy;
+  chip_h = (8 * cs - 13 * chip_gap) / 14;
+  st_x = m; st_w = W - 2 * m;
+  st_y = gy + 8 * cs + 4; st_h = gpanel.top - 2 - st_y;
+}
+
 static void layout(int W, int H) {
   int m = 8, gap = 6;
   int tb = 58;
   int by, bh, bx, bw, area;
+  if (mode == M_GUIDE) { guide_layout(W, H); return; }
   nbtn = 0;
 
   add_btn(m, m, 120, tb - m, B_LIST, tr(&S_LIST));
@@ -193,14 +223,16 @@ static void layout(int W, int H) {
 
 /* ---------- board drawing ---------- */
 
+static const DomBoard *view(void) { return mode == M_GUIDE ? &gboard : &boards[cur]; }
+
 static void draw_cell(int r, int c, const DomStatus *st) {
-  const DomBoard *b = &boards[cur];
+  const DomBoard *b = view();
   int i = r * DCOLS + c, j = b->partner[i];
   int x = gx + c * cs, y = gy + r * cs;
   int covered = j >= 0, conflict = covered && st->conflict[i], pending = (b->pending == i);
   int fill = conflict ? BLACK : covered ? 0xDDDDDD : pending ? 0xBBBBBB : WHITE;
   int edge = conflict ? WHITE : BLACK;
-  int t = covered ? (cs >= 60 ? 3 : 2) : pending ? 5 : 1;
+  int t = (covered && mode == M_GUIDE && gemph[i]) ? (cs >= 60 ? 5 : 4) : covered ? (cs >= 60 ? 3 : 2) : pending ? 5 : 1;
   char d[2] = {(char)('0' + b->p->grid[r][c]), 0};
   FillArea(x, y, cs, cs, fill);
   /* the sides towards the partner stay open: the two cells read as one tile */
@@ -214,7 +246,7 @@ static void draw_cell(int r, int c, const DomStatus *st) {
 static void draw_board(void) {
   DomStatus st;
   int r, c, k;
-  dom_status(&boards[cur], &st);
+  dom_status(view(), &st);
   for (r = 0; r < DROWS; r++)
     for (c = 0; c < DCOLS; c++) draw_cell(r, c, &st);
   /* the grid's outer frame */
@@ -256,6 +288,17 @@ static void draw_play(void) {
   draw_status(&st);
 }
 
+static void draw_guide(int W) {
+  DomStatus st;
+  char t[64];
+  tut_draw(TUT_DOMINO, gstep, W, &gpanel);
+  draw_board();
+  dom_status(&gboard, &st);
+  snprintf(t, sizeof t, tr(&S_PLACED), st.placed);
+  SetFont(ui_f_small, BLACK);
+  DrawTextRect(st_x, st_y, st_w, st_h, t, ALIGN_CENTER | VALIGN_MIDDLE);
+}
+
 static void draw_list(int W, int H) {
   int i, m = 12, top = 70, gap = 10, cols = 4, rows = (DNUM_PUZZLES + cols - 1) / cols;
   int bw = (W - 2 * m - (cols - 1) * gap) / cols, bh = (H - top - 90 - (rows - 1) * gap) / rows;
@@ -272,11 +315,11 @@ static void draw_list(int W, int H) {
     add_btn(x, y, bw, bh, 100 + i, "");
   }
   {
-    int bwid = 200, bx = (W - 2 * bwid - 20) / 2, by = H - 80; /* Back (to the puzzle) and Home (to the main menu) */
-    add_btn(bx, by, bwid, 64, B_CLOSE, tr(&S_BACK));
-    add_btn(bx + bwid + 20, by, bwid, 64, B_HOME, tr(&S_HOME));
-    ui_draw_btn(&btns[nbtn - 2]);
-    ui_draw_btn(&btns[nbtn - 1]);
+    int bwid = (W - 2 * m - 2 * gap) / 3, by = H - 80; /* Back (to the puzzle), How to solve and Home (to the main menu) */
+    add_btn(m, by, bwid, 64, B_CLOSE, tr(&S_BACK));
+    add_btn(m + bwid + gap, by, bwid, 64, TUT_B_GUIDE, tr(&TUT_S_GUIDE));
+    add_btn(m + 2 * (bwid + gap), by, bwid, 64, B_HOME, tr(&S_HOME));
+    for (i = nbtn - 3; i < nbtn; i++) ui_draw_btn(&btns[i]);
   }
 }
 
@@ -289,13 +332,15 @@ static void draw_help(int W, int H) {
 static void redraw(int full) {
   int W = ScreenWidth(), H = ScreenHeight();
   ui_fonts(28);
-  if (mode == M_PLAY) {
+  if (mode == M_GUIDE) dm_tut_board(&DPUZZLES[0], gstep, &gboard, gemph);
+  if (mode == M_PLAY || mode == M_GUIDE) {
     layout(W, H);
     ensure_digit_font(cs * 55 / 100 > 18 ? cs * 55 / 100 : 18);
     ensure_chip_font(chip_h * 60 / 100 > 12 ? chip_h * 60 / 100 : 12);
   }
   ClearScreen();
   if (mode == M_PLAY) draw_play();
+  else if (mode == M_GUIDE) draw_guide(W);
   else if (mode == M_LIST) draw_list(W, H);
   else draw_help(W, H);
   updates++;
@@ -310,6 +355,7 @@ static void open_puzzle(int i) {
   reset_armed = 0; msg[0] = 0;
   boards[cur].pending = -1;
   if (solved[cur]) strcpy(msg, tr(&S_SOLVED_BEFORE));
+  else if (boards[cur].p->tutorial) strcpy(msg, tr(&TUT_S_HINT));
   save_state();
 }
 
@@ -338,6 +384,11 @@ static void do_button(int id) {
     case B_LIST: mode = M_LIST; break;
     case B_HELP: mode = M_HELP; break;
     case B_CLOSE: mode = M_PLAY; break;
+    case TUT_B_GUIDE: mode = M_GUIDE; gstep = 0; break;
+    case TUT_B_BACK: case TUT_B_NEXT: case TUT_B_SKIP:
+      gstep = tut_next_step(TUT_DOMINO, gstep, id);
+      if (gstep < 0) { gstep = 0; mode = M_LIST; }
+      break;
     case B_HOME: left = 1; shell_leave(); return;
     default: break;
   }
@@ -395,10 +446,16 @@ static int domino_event(int type, int par1, int par2) {
       break;
     case EVT_KEYPRESS:
       if (par1 == KEY_BACK) {
-        if (mode != M_PLAY) { mode = M_PLAY; redraw(1); }
+        if (mode == M_GUIDE) { mode = M_LIST; redraw(1); }
+        else if (mode != M_PLAY) { mode = M_PLAY; redraw(1); }
         else shell_leave();
       } else if (par1 == KEY_HOME || par1 == KEY_MENU) {
         shell_leave(); /* the reader's hardware button: straight back to the home screen */
+      } else if (mode == M_GUIDE && (par1 == KEY_PREV || par1 == KEY_NEXT)) {
+        /* the reader's page keys step through the walkthrough (the last step is left with its Done button) */
+        if (par1 == KEY_PREV) gstep = gstep > 0 ? gstep - 1 : 0;
+        else if (gstep + 1 < TUT_COUNT[TUT_DOMINO]) gstep++;
+        redraw(1);
       } else if (par1 == KEY_PREV && mode == M_PLAY) {
         open_puzzle(cur - 1); redraw(1);
       } else if (par1 == KEY_NEXT && mode == M_PLAY) {

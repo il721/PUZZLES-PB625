@@ -4,6 +4,7 @@
 
 #include "digit_core.h"
 #include "digit_data.h"
+#include "digit_tutorial.h"
 
 static int fails, checks;
 #define CHECK(c) do { checks++; if (!(c)) { fails++; printf("FAIL line %d: %s\n", __LINE__, #c); } } while (0)
@@ -107,6 +108,35 @@ int main(void) {
     search(0);
     CHECK(nsol >= 1);
     if (nsol != 1) printf("note: puzzle %s has %d solutions (any of them wins)\n", p->id, nsol);
+  }
+  { /* the walkthrough: every cell is revealed once, no step shows a broken rule, the last board is the printed answer */
+    const DPuzzle *p = &DPUZZLES[0];
+    DGrid g;
+    DMarks m;
+    uint8_t emph[4][4], seen[4][4];
+    int st, j, r, c, n = 0;
+    CHECK(p->tutorial);
+    memset(seen, 0, sizeof seen);
+    for (st = 0; st < DG_TUT_STEPS; st++) {
+      const DgTutStep *t = &DG_TUT[st];
+      CHECK(t->hrow >= -1 && t->hrow < 4 && t->hcol >= -1 && t->hcol < 4 && t->nrev <= 4);
+      for (j = 0; j < t->nrev; j++) {
+        r = t->rev[j][0]; c = t->rev[j][1];
+        CHECK(r >= 0 && r < 4 && c >= 0 && c < 4 && !seen[r][c]);
+        seen[r][c] = 1;
+        n++;
+      }
+      dg_tut_board(p, st, &g, emph);
+      CHECK(dgrid_violations(&g, &m) == 0);
+    }
+    CHECK(n == 16);
+    dg_tut_board(p, DG_TUT_STEPS - 1, &g, emph);
+    CHECK(dgrid_complete(&g) && dgrid_wins(&g));
+    for (r = 0; r < 4; r++) for (c = 0; c < 4; c++) CHECK(g.d[r][c] == p->answer[r][c]);
+    dg_tut_board(p, 2, &g, emph);  /* step 3: row 2 emphasised, nothing revealed yet */
+    CHECK(emph[1][0] && emph[1][3] && !emph[0][0] && !emph[2][1] && g.d[1][0] == -1);
+    dg_tut_board(p, 4, &g, emph);  /* step 5: column 1 */
+    CHECK(emph[0][0] && emph[3][0] && !emph[0][1] && g.d[0][0] == p->answer[0][0] && g.d[2][1] == -1);
   }
   printf("%d checks, %d failed\n", checks, fails);
   return fails != 0;

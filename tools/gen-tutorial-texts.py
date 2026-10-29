@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""Generate native/puzzlebook/tutorial_text.c: the texts of the guided walkthroughs (English, Russian, German).
+
+The texts are those of il721/puzzles (app/lib/l10n/app_{en,ru,de}.arb, keys tutorialStepN, digitRebusTutorialStepN,
+dominoTutorialStepN, labyrinthTutorialStepN, squarewordTutorialStepN, keywordRebusTutorialStepN), with two kinds of change:
+  * characters the reader's fonts may lack are replaced (U+2212 minus -> '-', U+2026 ellipsis -> '...');
+  * the few steps that talk about controls this app does not have (a menu, a long press, a blue mark, red tiles) are
+    replaced by the OVERRIDES below.
+Usage: python3 tools/gen-tutorial-texts.py [path to a clone of il721/puzzles]
+"""
+import json, os, re, sys
+
+src = sys.argv[1] if len(sys.argv) > 1 else '/home/user/il721/puzzles'
+out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'native', 'puzzlebook', 'tutorial_text.c')
+LANGS = ('en', 'ru', 'de')
+MODS = [('REBUS', 'tutorialStep', 15), ('DIGIT', 'digitRebusTutorialStep', 9), ('DOMINO', 'dominoTutorialStep', 10),
+        ('LAB', 'labyrinthTutorialStep', 12), ('SQUARE', 'squarewordTutorialStep', 12), ('KEYWORD', 'keywordRebusTutorialStep', 10)]
+
+OVERRIDES = {
+    'digitRebusTutorialStep9': (
+        'Done! In the puzzles, tap a cell — the pad offers only the digits its glyph admits. Any filling where all eight equations hold wins.',
+        'Готово! В ребусах нажимайте на клетку — на панели будут только допустимые цифры. Побеждает любое заполнение, где сходятся все восемь примеров.',
+        'Fertig! Tippen Sie in den Rätseln auf ein Feld — die Leiste bietet nur die zulässigen Ziffern an. Jede Füllung, bei der alle acht Aufgaben stimmen, gewinnt.'),
+    'dominoTutorialStep2': (
+        'Beside the board: the 28 pairs of the set (a pair turns black once it is built) and below it a "Placed N of 28" counter. If the same pair appears twice, both dominoes turn black — the solitaire won\'t come out until the duplicate is gone.',
+        'Рядом с полем — 28 пар набора (собранная пара чернеет), а под ним счётчик «Выставлено: N из 28». Если одна и та же пара окажется дважды, обе косточки станут чёрными: пасьянс не сойдётся, пока повтор не убран.',
+        'Neben dem Feld: die 28 Paare des Satzes (ein gelegtes Paar wird schwarz) und darunter der Zähler „Gelegt: N von 28“. Kommt dasselbe Paar zweimal vor, werden beide Steine schwarz — die Patience geht erst auf, wenn die Dopplung weg ist.'),
+    'labyrinthTutorialStep3': (
+        'Tap a cell that isn\'t next to the path to mark it with a black frame: that letter must be on the path — like U, which occurs only once in the labyrinth. Switch on the Cross button and tap a cell to cross it out: that letter will not join the path — one of the two Y\'s, for instance. As soon as one of several identical letters joins the path, the rest are dimmed automatically.',
+        'Нажмите на клетку не рядом с путём, чтобы обвести её чёрной рамкой: эта буква обязательно на пути — как У, которая встречается в лабиринте один раз. Включите кнопку «Крест» и нажмите на клетку, чтобы зачеркнуть её: эта буква в путь не войдёт — например, одна из двух Ю. Как только одна из одинаковых букв попадает на путь, остальные тускнеют сами.',
+        'Tippen Sie auf ein Feld, das nicht neben dem Weg liegt, um es schwarz zu umrahmen: dieser Buchstabe muss auf dem Weg liegen — wie U, das im Labyrinth nur einmal vorkommt. Schalten Sie „Kreuz“ ein und tippen Sie ein Feld an, um es durchzustreichen: dieser Buchstabe kommt nicht auf den Weg — etwa eines der beiden Y. Sobald einer von mehreren gleichen Buchstaben auf dem Weg liegt, werden die übrigen automatisch abgeblendet.'),
+    'keywordRebusTutorialStep10': (
+        'Done! Ordered by their digits from 0 to 9, the letters spell the keyword "ГИПОТЕНУЗА". In the puzzles, tap a letter, then its digit on the pad.',
+        'Готово! Буквы, выстроенные по цифрам от 0 до 9, дают ключевое слово «ГИПОТЕНУЗА». В ребусах нажмите на букву, затем на её цифру на панели.',
+        'Fertig! Nach ihren Ziffern von 0 bis 9 geordnet, ergeben die Buchstaben das Schlüsselwort „ГИПОТЕНУЗА“. Tippen Sie in den Rätseln auf einen Buchstaben, dann auf seine Ziffer.'),
+}
+
+
+def clean(s):
+    return s.replace('−', '-').replace('…', '...')
+
+
+def literal(s):
+    """A C string literal (UTF-8 passes through), split at spaces into lines of about 100 characters"""
+    s = clean(s).replace('\\', '\\\\').replace('"', '\\"')
+    assert "''" not in s and '\n' not in s
+    words, lines, cur = s.split(' '), [], ''
+    for w in words:
+        if cur and len(cur) + 1 + len(w) > 100:
+            lines.append(cur + ' ')
+            cur = w
+        else:
+            cur = (cur + ' ' + w) if cur else w
+    lines.append(cur)
+    return '\n      '.join('"%s"' % l for l in lines)
+
+
+arb = {l: json.load(open(os.path.join(src, 'app', 'lib', 'l10n', 'app_%s.arb' % l))) for l in LANGS}
+out = ['/* Generated by tools/gen-tutorial-texts.py from the l10n files of il721/puzzles. Do not edit. */',
+       '#include "tutorial.h"', '']
+for name, prefix, n in MODS:
+    out.append('static const Str T_%s[%d] = {' % (name, n))
+    for i in range(1, n + 1):
+        key = '%s%d' % (prefix, i)
+        texts = OVERRIDES[key] if key in OVERRIDES else tuple(arb[l][key] for l in LANGS)
+        out.append('  /* %d */ S(%s)%s' % (i, ',\n      '.join(literal(t) for t in texts), ',' if i < n else ''))
+    out += ['};', '']
+out.append('const Str *const TUT_TEXTS[TUT_MODS] = {%s};' % ', '.join('T_' + m[0] for m in MODS))
+out.append('const int TUT_COUNT[TUT_MODS] = {%s};' % ', '.join(str(m[2]) for m in MODS))
+out.append('')
+open(out_path, 'w').write('\n'.join(out))
+print('wrote %s: %d steps' % (os.path.normpath(out_path), sum(m[2] for m in MODS)))

@@ -6,15 +6,17 @@
 #include <string.h>
 
 #include "../shell.h"
+#include "../tutorial.h"
 #include "rebus_core.h"
 #include "rebus_data.h"
+#include "rebus_tutorial.h"
 
 #ifndef SAVEF
 #define SAVEF "/mnt/ext1/rebus.sav"
 #endif
 
 enum { B_D0 = 0, B_DEL = 10, B_CHECK, B_RESET, B_PREV, B_NEXT, B_LIST, B_HELP, B_HOME, B_CLOSE };
-enum { M_PLAY, M_LIST, M_HELP };
+enum { M_PLAY, M_LIST, M_HELP, M_GUIDE };
 
 typedef UiBtn Btn;
 typedef struct { int r, s, k, x, y, w, h; } Cell;
@@ -27,6 +29,10 @@ static int selr = -1, sels = -1, selk = -1;
 static Marks marks;
 static int have_marks, reset_armed, updates;
 static char msg[200];
+static int gstep;                  /* guided walkthrough (mode M_GUIDE): the step, 0-based */
+static Grid ggrid;                 /* its board, rebuilt for every redraw; never saved */
+static uint8_t gemph[5][5][MAXPOS]; /* cells the step emphasises */
+static TutPanel gpanel;
 static int left; /* set when the module handed control back to the shell */
 
 static Btn btns[32];
@@ -144,9 +150,19 @@ static const char *DIGIT_LABEL[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8
 
 static int gx, gy, gw, gh; /* grid area */
 
+/* walkthrough: the board on top, the step text and its buttons below (tutorial.h) */
+static void guide_layout(int W, int H) {
+  int i, m = 8;
+  nbtn = 0;
+  tut_layout(TUT_REBUS, gstep, W, H, &gpanel);
+  for (i = 0; i < gpanel.nbtn; i++) add_btn(gpanel.btn[i].x, gpanel.btn[i].y, gpanel.btn[i].w, gpanel.btn[i].h, gpanel.btn[i].id, gpanel.btn[i].label);
+  gx = m; gy = 62; gw = W - 2 * m; gh = gpanel.top - 4 - gy;
+}
+
 static void layout(int W, int H) {
   int m = 8, gap = 6, i;
   int tb = 58;
+  if (mode == M_GUIDE) { guide_layout(W, H); return; }
   nbtn = 0;
 
   /* top bar */
@@ -177,8 +193,9 @@ static void layout(int W, int H) {
 /* ---------- grid drawing ---------- */
 
 static void build_and_draw_grid(int draw) {
-  const Puzzle *p = grids[cur].p;
-  const Grid *g = &grids[cur];
+  const int guide = (mode == M_GUIDE);
+  const Grid *g = guide ? &ggrid : &grids[cur];
+  const Puzzle *p = g->p;
   int colw[5], j, r, s, k;
   double units;
   int bh, bw, opw, pitch, divgap, totalw, totalh, x0, y0;
@@ -252,11 +269,12 @@ static void build_and_draw_grid(int draw) {
   for (j = 0; j < ncells; j++) {
     const Cell *c = &cells[j];
     int given = g->given[c->r][c->s][c->k], d = g->digit[c->r][c->s][c->k];
-    int bad = have_marks && marks.bad[c->r][c->s][c->k];
-    int issel = (c->r == selr && c->s == sels && c->k == selk);
+    int bad = !guide && have_marks && marks.bad[c->r][c->s][c->k];
+    int issel = !guide && (c->r == selr && c->s == sels && c->k == selk);
+    int thick = (issel || (guide && gemph[c->r][c->s][c->k])) ? 4 : 1;
     int fill = bad ? BLACK : (given ? 0xCCCCCC : WHITE);
     char t[2] = {0, 0};
-    ui_box(c->x + 1, c->y, c->w - 2, c->h, issel ? 4 : 1, fill);
+    ui_box(c->x + 1, c->y, c->w - 2, c->h, thick, fill);
     if (d >= 0) {
       t[0] = (char)('0' + d);
       ui_text_center(f_digit, bad ? WHITE : BLACK, c->x, c->y, c->w, c->h, t);
@@ -316,6 +334,11 @@ static void draw_play(int W, int H) {
   (void)W;
 }
 
+static void draw_guide(int W) {
+  tut_draw(TUT_REBUS, gstep, W, &gpanel);
+  build_and_draw_grid(1);
+}
+
 static void draw_list(int W, int H) {
   int i, m = 12, top = 70, gap = 10, cols = 4, rows = (NUM_PUZZLES + cols - 1) / cols;
   int bw = (W - 2 * m - (cols - 1) * gap) / cols, bh = (H - top - 90 - (rows - 1) * gap) / rows;
@@ -332,11 +355,11 @@ static void draw_list(int W, int H) {
     add_btn(x, y, bw, bh, 100 + i, "");
   }
   {
-    int bwid = 200, bx = (W - 2 * bwid - 20) / 2, by = H - 80; /* Back (to the puzzle) and Home (to the main menu) */
-    add_btn(bx, by, bwid, 64, B_CLOSE, tr(&S_BACK));
-    add_btn(bx + bwid + 20, by, bwid, 64, B_HOME, tr(&S_HOME));
-    ui_draw_btn(&btns[nbtn - 2]);
-    ui_draw_btn(&btns[nbtn - 1]);
+    int bwid = (W - 2 * m - 2 * gap) / 3, by = H - 80; /* Back (to the puzzle), How to solve and Home (to the main menu) */
+    add_btn(m, by, bwid, 64, B_CLOSE, tr(&S_BACK));
+    add_btn(m + bwid + gap, by, bwid, 64, TUT_B_GUIDE, tr(&TUT_S_GUIDE));
+    add_btn(m + 2 * (bwid + gap), by, bwid, 64, B_HOME, tr(&S_HOME));
+    for (i = nbtn - 3; i < nbtn; i++) ui_draw_btn(&btns[i]);
   }
 }
 
@@ -352,9 +375,11 @@ static void redraw(int full) {
   if (dsize < 22) dsize = 22;
   ensure_digit_font(dsize);
   ui_fonts(28);
-  if (mode == M_PLAY) layout(W, H);
+  if (mode == M_GUIDE) rb_tut_board(&PUZZLES[0], gstep, &ggrid, gemph);
+  if (mode == M_PLAY || mode == M_GUIDE) layout(W, H);
   ClearScreen();
   if (mode == M_PLAY) draw_play(W, H);
+  else if (mode == M_GUIDE) draw_guide(W);
   else if (mode == M_LIST) draw_list(W, H);
   else draw_help(W, H);
   updates++;
@@ -368,6 +393,7 @@ static void open_puzzle(int i) {
   cur = (i % NUM_PUZZLES + NUM_PUZZLES) % NUM_PUZZLES;
   have_marks = 0; reset_armed = 0; msg[0] = 0;
   if (solved[cur]) strcpy(msg, tr(&S_SOLVED_BEFORE));
+  else if (grids[cur].p->tutorial) strcpy(msg, tr(&TUT_S_HINT));
   select_first();
   save_state();
 }
@@ -415,6 +441,11 @@ static void do_button(int id) {
     case B_LIST: mode = M_LIST; break;
     case B_HELP: mode = M_HELP; break;
     case B_CLOSE: mode = M_PLAY; break;
+    case TUT_B_GUIDE: mode = M_GUIDE; gstep = 0; break;
+    case TUT_B_BACK: case TUT_B_NEXT: case TUT_B_SKIP:
+      gstep = tut_next_step(TUT_REBUS, gstep, id);
+      if (gstep < 0) { gstep = 0; mode = M_LIST; }
+      break;
     case B_HOME: left = 1; shell_leave(); return;
     default:
       if (id >= 0 && id <= 9) enter_digit(id);
@@ -474,11 +505,17 @@ static int rebus_event(int type, int par1, int par2) {
       break;
     case EVT_KEYPRESS:
       if (par1 == KEY_BACK) {
-        if (mode != M_PLAY) { mode = M_PLAY; redraw(1); }
+        if (mode == M_GUIDE) { mode = M_LIST; redraw(1); }
+        else if (mode != M_PLAY) { mode = M_PLAY; redraw(1); }
         else shell_leave();
       } else if (par1 == KEY_HOME || par1 == KEY_MENU) {
         /* the reader's hardware button: straight back to the home screen from any screen of the module */
         shell_leave();
+      } else if (mode == M_GUIDE && (par1 == KEY_PREV || par1 == KEY_NEXT)) {
+        /* the reader's page keys step through the walkthrough (the last step is left with its Done button) */
+        if (par1 == KEY_PREV) gstep = gstep > 0 ? gstep - 1 : 0;
+        else if (gstep + 1 < TUT_COUNT[TUT_REBUS]) gstep++;
+        redraw(1);
       } else if (par1 == KEY_PREV && mode == M_PLAY) {
         open_puzzle(cur - 1); redraw(1);
       } else if (par1 == KEY_NEXT && mode == M_PLAY) {

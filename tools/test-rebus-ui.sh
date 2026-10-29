@@ -9,7 +9,7 @@ OUT=${OUT:-$T}
 mkdir -p "$OUT"
 N=native/puzzlebook
 gcc -Wall -Wextra -std=gnu99 -Itools/fake-inkview -c tools/fake-inkview/inkview_svg.c -o "$T/shim.o"
-for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c tools/test-modules1.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c; do
+for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c $N/tutorial.c $N/tutorial_text.c tools/test-modules1.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c; do
   gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" -DPROGF="\"$T/progress.json\"" \
     -Itools/fake-inkview -I$N -I$N/rebus -c $f -o "$T/$(basename $f .c).o"
 done
@@ -17,7 +17,7 @@ gcc "$T"/*.o -o "$T/ui"
 
 # second variant: two modules (template module registered through tools/test-modules2.c)
 T2="$T/two"; mkdir -p "$T2"
-for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c tools/test-modules2.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/example/module_example.c; do
+for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c $N/tutorial.c $N/tutorial_text.c tools/test-modules2.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/example/module_example.c; do
   sv=rebus.sav; case $f in *example*) sv=example.sav;; esac
   gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/$sv\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" -DPROGF="\"$T/progress.json\"" \
     -Itools/fake-inkview -I$N -I$N/rebus -c $f -o "$T2/$(basename $f .c).o"
@@ -26,7 +26,7 @@ gcc "$T/shim.o" "$T2"/*.o -o "$T/ui2"
 
 # third variant: the real registry (modules.c): Square Rebuses + Digit Rebuses
 T3="$T/full"; mkdir -p "$T3"
-for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/digit/module_digit.c $N/digit/digit_core.c $N/domino/module_domino.c $N/domino/domino_core.c $N/labyrinth/module_labyrinth.c $N/labyrinth/labyrinth_core.c $N/squareword/module_squareword.c $N/squareword/squareword_core.c $N/keyword/module_keyword.c $N/keyword/keyword_core.c $N/playground/module_playground.c $N/playground/pg_core.c; do
+for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c $N/tutorial.c $N/tutorial_text.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/digit/module_digit.c $N/digit/digit_core.c $N/domino/module_domino.c $N/domino/domino_core.c $N/labyrinth/module_labyrinth.c $N/labyrinth/labyrinth_core.c $N/squareword/module_squareword.c $N/squareword/squareword_core.c $N/keyword/module_keyword.c $N/keyword/keyword_core.c $N/playground/module_playground.c $N/playground/pg_core.c; do
   gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DDIGITSAVEF="\"$T/digit.sav\"" -DDOMINOSAVEF="\"$T/domino.sav\"" -DLABYRINTHSAVEF="\"$T/labyrinth.sav\"" -DSQUAREWORDSAVEF="\"$T/squareword.sav\"" -DKEYWORDSAVEF="\"$T/keyword.sav\"" -DPLAYGROUNDSAVEF="\"$T/playground.sav\"" -DPG_GEOM_LOG -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" -DPROGF="\"$T/progress.json\"" \
     -Itools/fake-inkview -I$N -I$N/rebus -I$N/digit -I$N/domino -I$N/labyrinth -I$N/squareword -I$N/keyword -I$N/playground -c $f -o "$T3/$(basename $f .c).o"
 done
@@ -1305,6 +1305,65 @@ printf 'language=fr\n' > "$T/global.cfg"; rm -f "$T/cfg"
 printf 'size 600 800\nshow\nexpect Puzzle Book\nquit\n' > "$T/sys-fr.script"
 if REBUS_SCRIPT="$T/sys-fr.script" "$T/ui"; then echo "PASS unknown system language -> English"; else echo "FAIL unknown system language"; RC=1; fi
 rm -f "$T/cfg" "$T/global.cfg"
+
+# ---- guided walkthroughs ("How to solve" on every list screen of the six puzzle modules): every step in English, Russian and German,
+# Back / Skip / the Back key / the page keys / the Home key, the board screenshots
+python3 - "$T" "$OUT" <<'PY'
+import re, sys
+sys.path.insert(0, 'tools')
+import tutorial_texts
+T, OUT = sys.argv[1:3]
+texts = tutorial_texts.load()
+MODS = [('REBUS', 'rebus'), ('DIGIT', 'digit'), ('DOMINO', 'domino'), ('LAB', 'labyrinth'), ('SQUARE', 'squareword'), ('KEYWORD', 'keyword')]
+LB = {'en': dict(guide='How to solve', nxt='Next', done='Done', skip='Skip', back='Back', lst='List', home='Puzzle Book', step='Step %d of %d'),
+      'ru': dict(guide='Как решать', nxt='Далее', done='Готово', skip='Пропустить', back='Назад', lst='Список', home='Головоломки', step='Шаг %d из %d'),
+      'de': dict(guide='So wird gelöst', nxt='Weiter', done='Fertig', skip='Überspringen', back='Zurück', lst='Liste', home='Rätselbuch', step='Schritt %d von %d')}
+LANGS = ('en', 'ru', 'de')
+
+def title(key, lang):
+    src = open('native/puzzlebook/%s/module_%s.c' % (key, key), encoding='utf-8').read()
+    m = re.search(r'const Module module_%s = \{\s*"%s",\s*S\("([^"]*)",\s*"([^"]*)",\s*"([^"]*)"\)' % (key, key), src)
+    return m.group(1 + LANGS.index(lang))
+
+def prefix(t):
+    t = t[:18]
+    for ch in '&<>"':   # the SVG shim escapes these; a prefix stops before them
+        t = t.split(ch)[0]
+    return t.rstrip()
+
+for mod, key in MODS:
+    n = len(texts[mod])
+    for li, lang in enumerate(LANGS):
+        lb = LB[lang]
+        st = lambda i: lb['step'] % (i, n)
+        pre = lambda i: prefix(texts[mod][i][li])
+        L = ['size 600 800', 'show', 'tapl ' + title(key, lang), 'tapl ' + lb['lst'], 'tapl ' + lb['guide'], 'expect ' + st(1), 'expect ' + pre(0),
+             'expect_not ' + lb['back'], 'svg %s/guide-%s-%s-1.svg' % (OUT, key, lang)]
+        for i in range(1, n):
+            L += ['tapl ' + lb['nxt'], 'expect ' + st(i + 1), 'expect ' + pre(i)]
+            if lang == 'en' or i == n - 1: L.append('svg %s/guide-%s-%s-%d.svg' % (OUT, key, lang, i + 1))
+        L += ['expect ' + lb['done'], 'tapl ' + lb['done'], 'expect ' + lb['guide'],            # Done: back to the list
+              'tapl ' + lb['guide'], 'tapl ' + lb['nxt'], 'tapl ' + lb['nxt'], 'tapl ' + lb['back'], 'expect ' + st(2), 'tapl ' + lb['skip'], 'expect ' + lb['guide'],
+              'tapl ' + lb['guide'], 'key 25', 'expect ' + st(2), 'key 24', 'expect ' + st(1), 'key 24', 'expect ' + st(1), 'key 27', 'expect ' + lb['guide'],
+              'tapl ' + lb['guide'], 'key 23', 'expect ' + lb['home'], 'quit']
+        open('%s/guide-%s-%s.script' % (T, key, lang), 'w').write('\n'.join(L) + '\n')
+PY
+for lg in en ru de; do
+  for key in rebus digit domino labyrinth squareword keyword; do
+    rm -f "$T"/*.sav "$T/cfg" "$T/global.cfg"; [ $lg = en ] || printf 'lang=%s\n' $lg > "$T/cfg"
+    if REBUS_SCRIPT="$T/guide-$key-$lg.script" "$T/ui3"; then echo "PASS guide $key $lg"; else echo "FAIL guide $key $lg"; RC=1; fi
+  done
+done
+rm -f "$T"/*.sav "$T/cfg" "$T/global.cfg"
+# playing is untouched by a walkthrough: the sample is still where it was and the save file is the same with and without one
+rm -f "$T"/*.sav
+printf 'size 600 800\nshow\ntapl Square Rebuses\ntapl <\nexpect Example\nkey 23\nquit\n' > "$T/guide-base.script"
+REBUS_SCRIPT="$T/guide-base.script" "$T/ui3" > /dev/null && sed -n '1,2p' "$T/rebus.sav" > "$T/rebus-base.txt"
+rm -f "$T"/*.sav
+printf 'size 600 800\nshow\ntapl Square Rebuses\ntapl <\nexpect Example\ntapl List\ntapl How to solve\ntapl Next\ntapl Next\ntapl Next\ntapl Next\ntapl Next\ntapl Skip\ntapl Back\nexpect Example\nexpect List > How\nkey 23\nquit\n' > "$T/guide-state.script"
+if REBUS_SCRIPT="$T/guide-state.script" "$T/ui3"; then echo "PASS guide leaves the sample alone"; else echo "FAIL guide leaves the sample alone"; RC=1; fi
+if sed -n '1,2p' "$T/rebus.sav" | cmp -s - "$T/rebus-base.txt"; then echo "PASS guide board not saved"; else echo "FAIL guide board not saved"; RC=1; fi
+rm -f "$T"/*.sav
 
 if [ -n "$KEEP" ] || [ "$OUT" != "$T" ]; then
   if node -e "require('playwright')" 2>/dev/null; then

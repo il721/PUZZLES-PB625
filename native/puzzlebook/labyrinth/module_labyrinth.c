@@ -11,15 +11,17 @@
 #include <string.h>
 
 #include "../shell.h"
+#include "../tutorial.h"
 #include "labyrinth_core.h"
 #include "labyrinth_data.h"
+#include "labyrinth_tutorial.h"
 
 #ifndef LABYRINTHSAVEF
 #define LABYRINTHSAVEF "/mnt/ext1/labyrinth.sav"
 #endif
 
 enum { B_CROSS = 10, B_RESET, B_PREV, B_NEXT, B_LIST, B_HELP, B_HOME, B_CLOSE };
-enum { M_PLAY, M_LIST, M_HELP };
+enum { M_PLAY, M_LIST, M_HELP, M_GUIDE };
 
 typedef UiBtn Btn;
 
@@ -29,6 +31,10 @@ static long long stamp[LNUM_PUZZLES]; /* ms since 1970 of the last change to eac
 static int cur = 1, mode = M_PLAY;
 static int tool_cross, reset_armed, updates;
 static char msg[200];
+static LabBoard gboard;             /* the walkthrough board, rebuilt for every redraw; never saved */
+static uint8_t gemph[LCELLS];       /* cells the step emphasises */
+static int gstep;                  /* guided walkthrough (mode M_GUIDE): the step, 0-based */
+static TutPanel gpanel;
 static int left; /* set when the module handed control back to the shell */
 
 static Btn btns[32];
@@ -179,9 +185,22 @@ static void add_btn(int x, int y, int w, int h, int id, const char *label) {
   b->x = x; b->y = y; b->w = w; b->h = h; b->id = id; b->label = label;
 }
 
+/* walkthrough: the grid on top (no alphabet tracker), the step text and its buttons below (tutorial.h) */
+static void guide_layout(int W, int H) {
+  int i, m = 8;
+  nbtn = 0;
+  tut_layout(TUT_LAB, gstep, W, H, &gpanel);
+  for (i = 0; i < gpanel.nbtn; i++) add_btn(gpanel.btn[i].x, gpanel.btn[i].y, gpanel.btn[i].w, gpanel.btn[i].h, gpanel.btn[i].id, gpanel.btn[i].label);
+  gy = 58;
+  cs = (gpanel.top - 4 - gy) / 8;
+  if ((W - 2 * m) / 8 < cs) cs = (W - 2 * m) / 8;
+  gx = m + (W - 2 * m - 8 * cs) / 2;
+}
+
 static void layout(int W, int H) {
   int m = 8, gap = 6;
   int tb = 54;
+  if (mode == M_GUIDE) { guide_layout(W, H); return; }
   nbtn = 0;
 
   add_btn(m, m, 120, tb - m, B_LIST, tr(&S_LIST));
@@ -241,7 +260,7 @@ static void draw_ring(int cell, int color) {
 }
 
 static void draw_board(void) {
-  const LabBoard *b = &boards[cur];
+  const LabBoard *b = mode == M_GUIDE ? &gboard : &boards[cur];
   LabStatus st;
   int r, c, i, bt = cs * 16 / 100 > 4 ? cs * 16 / 100 : 4;
   lab_status(b, &st);
@@ -264,6 +283,9 @@ static void draw_board(void) {
       if (b->mark[cell]) for (k = 0; k < 4; k++) DrawRect(x + 2 + k, y + 2 + k, cs - 4 - 2 * k, cs - 4 - 2 * k, BLACK);
       if (b->cross[cell]) draw_x(x, y, cs);
     }
+  if (mode == M_GUIDE)
+    for (i = 0; i < LCELLS; i++)
+      if (gemph[i]) draw_ring(i, BLACK);
   /* the letters, always all 64 in reading order */
   for (r = 0; r < 8; r++)
     for (c = 0; c < 8; c++) {
@@ -273,7 +295,7 @@ static void draw_board(void) {
       ui_text_center(f_letter, color, gx + c * cs, gy + r * cs, cs, cs, letter_text(b->p->letter[cell]));
     }
   /* the alphabet: white = still to place, grey with a line through = on the path, black = used twice */
-  for (i = 0; i < 33; i++) {
+  for (i = 0; i < 33 && mode != M_GUIDE; i++) {
     int x = chip_x + (i % chip_cols) * (chip_w + chip_gap), y = chip_y + (i / chip_cols) * (chip_h + chip_gap);
     int u = st.used[i];
     ui_box(x, y, chip_w, chip_h, 1, u > 1 ? BLACK : u == 1 ? 0xDDDDDD : WHITE);
@@ -322,6 +344,11 @@ static void draw_play(void) {
   draw_status(&st);
 }
 
+static void draw_guide(int W) {
+  tut_draw(TUT_LAB, gstep, W, &gpanel);
+  draw_board();
+}
+
 static void draw_list(int W, int H) {
   int i, m = 12, top = 70, gap = 10, cols = 4, rows = (LNUM_PUZZLES + cols - 1) / cols;
   int bw = (W - 2 * m - (cols - 1) * gap) / cols, bh = (H - top - 90 - (rows - 1) * gap) / rows;
@@ -338,11 +365,11 @@ static void draw_list(int W, int H) {
     add_btn(x, y, bw, bh, 100 + i, "");
   }
   {
-    int bwid = 200, bx = (W - 2 * bwid - 20) / 2, by = H - 80; /* Back (to the puzzle) and Home (to the main menu) */
-    add_btn(bx, by, bwid, 64, B_CLOSE, tr(&S_BACK));
-    add_btn(bx + bwid + 20, by, bwid, 64, B_HOME, tr(&S_HOME));
-    ui_draw_btn(&btns[nbtn - 2]);
-    ui_draw_btn(&btns[nbtn - 1]);
+    int bwid = (W - 2 * m - 2 * gap) / 3, by = H - 80; /* Back (to the puzzle), How to solve and Home (to the main menu) */
+    add_btn(m, by, bwid, 64, B_CLOSE, tr(&S_BACK));
+    add_btn(m + bwid + gap, by, bwid, 64, TUT_B_GUIDE, tr(&TUT_S_GUIDE));
+    add_btn(m + 2 * (bwid + gap), by, bwid, 64, B_HOME, tr(&S_HOME));
+    for (i = nbtn - 3; i < nbtn; i++) ui_draw_btn(&btns[i]);
   }
 }
 
@@ -355,13 +382,15 @@ static void draw_help(int W, int H) {
 static void redraw(int full) {
   int W = ScreenWidth(), H = ScreenHeight();
   ui_fonts(28);
-  if (mode == M_PLAY) {
+  if (mode == M_GUIDE) lb_tut_board(&LPUZZLES[0], gstep, &gboard, gemph);
+  if (mode == M_PLAY || mode == M_GUIDE) {
     layout(W, H);
     ensure_letter_font(cs * 50 / 100 > 18 ? cs * 50 / 100 : 18);
     ensure_chip_font(chip_h * 58 / 100 > 12 ? chip_h * 58 / 100 : 12);
   }
   ClearScreen();
   if (mode == M_PLAY) draw_play();
+  else if (mode == M_GUIDE) draw_guide(W);
   else if (mode == M_LIST) draw_list(W, H);
   else draw_help(W, H);
   updates++;
@@ -375,6 +404,7 @@ static void open_puzzle(int i) {
   cur = (i % LNUM_PUZZLES + LNUM_PUZZLES) % LNUM_PUZZLES;
   reset_armed = 0; msg[0] = 0;
   if (solved[cur]) strcpy(msg, tr(&S_SOLVED_BEFORE));
+  else if (boards[cur].p->tutorial) strcpy(msg, tr(&TUT_S_HINT));
   save_state();
 }
 
@@ -404,6 +434,11 @@ static void do_button(int id) {
     case B_LIST: mode = M_LIST; break;
     case B_HELP: mode = M_HELP; break;
     case B_CLOSE: mode = M_PLAY; break;
+    case TUT_B_GUIDE: mode = M_GUIDE; gstep = 0; break;
+    case TUT_B_BACK: case TUT_B_NEXT: case TUT_B_SKIP:
+      gstep = tut_next_step(TUT_LAB, gstep, id);
+      if (gstep < 0) { gstep = 0; mode = M_LIST; }
+      break;
     case B_HOME: left = 1; shell_leave(); return;
     default: break;
   }
@@ -454,10 +489,16 @@ static int labyrinth_event(int type, int par1, int par2) {
       break;
     case EVT_KEYPRESS:
       if (par1 == KEY_BACK) {
-        if (mode != M_PLAY) { mode = M_PLAY; redraw(1); }
+        if (mode == M_GUIDE) { mode = M_LIST; redraw(1); }
+        else if (mode != M_PLAY) { mode = M_PLAY; redraw(1); }
         else shell_leave();
       } else if (par1 == KEY_HOME || par1 == KEY_MENU) {
         shell_leave(); /* the reader's hardware button: straight back to the home screen */
+      } else if (mode == M_GUIDE && (par1 == KEY_PREV || par1 == KEY_NEXT)) {
+        /* the reader's page keys step through the walkthrough (the last step is left with its Done button) */
+        if (par1 == KEY_PREV) gstep = gstep > 0 ? gstep - 1 : 0;
+        else if (gstep + 1 < TUT_COUNT[TUT_LAB]) gstep++;
+        redraw(1);
       } else if (par1 == KEY_PREV && mode == M_PLAY) {
         open_puzzle(cur - 1); redraw(1);
       } else if (par1 == KEY_NEXT && mode == M_PLAY) {

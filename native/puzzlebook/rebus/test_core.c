@@ -5,6 +5,7 @@
 
 #include "rebus_core.h"
 #include "rebus_data.h"
+#include "rebus_tutorial.h"
 
 static int fails, checks;
 #define CHECK(c) do { checks++; if (!(c)) { fails++; printf("FAIL line %d: %s\n", __LINE__, #c); } } while (0)
@@ -102,6 +103,47 @@ int main(void) {
     CHECK(eval_row(n1, ":+*", &o) == -1);
     CHECK(eval_row(n2, ":+*", &o) == -1);
     CHECK(eval_row(n1, "+:*", &o) == -1 || o == 9);
+  }
+
+  { /* the walkthrough: reveals are real, new, editable cells; together with the givens they give the printed solution, which wins */
+    const Puzzle *p = &PUZZLES[0];
+    Grid g;
+    uint8_t emph[5][5][MAXPOS], seen[5][5][MAXPOS];
+    int st, j, nreveal = 0, neditable = 0, nem;
+    CHECK(p->tutorial);
+    memset(seen, 0, sizeof seen);
+    for (st = 0; st < RB_TUT_STEPS; st++) {
+      const RbTutStep *t = &RB_TUT[st];
+      CHECK(t->nrev <= 8 && t->ncell <= 4);
+      CHECK(t->hrow >= -1 && t->hrow <= 4 && t->hcol >= -1 && t->hcol <= 3);
+      for (j = 0; j < t->nrev; j++) {
+        const int8_t *c = t->rev[j];
+        grid_init(&g, p);
+        CHECK(c[0] >= 0 && c[0] < 5 && c[1] >= 0 && c[1] < 5 && c[2] >= 0 && c[2] < g.width[c[0]][c[1]]);
+        CHECK(!g.given[c[0]][c[1]][c[2]]);   /* never a printed cell */
+        CHECK(!seen[c[0]][c[1]][c[2]]);      /* revealed once */
+        seen[c[0]][c[1]][c[2]] = 1;
+        nreveal++;
+      }
+      for (j = 0; j < t->ncell; j++) {
+        const int8_t *c = t->cell[j];
+        grid_init(&g, p);
+        CHECK(c[2] < g.width[c[0]][c[1]]);
+      }
+      rb_tut_board(p, st, &g, emph);
+      nem = 0;
+      for (r = 0; r < 5; r++) for (s = 0; s < 5; s++) for (k = 0; k < MAXPOS; k++) nem += emph[r][s][k];
+      CHECK((nem == 0) == (t->hrow < 0 && t->hcol < 0 && t->ncell == 0));   /* emphasis exactly where the step asks for it */
+      { Marks m; CHECK(grid_violations(&g, &m) == 0); }  /* no step shows a broken rule */
+    }
+    grid_init(&g, p);
+    for (r = 0; r < 5; r++) for (s = 0; s < 5; s++) for (k = 0; k < g.width[r][s]; k++) neditable += !g.given[r][s][k];
+    CHECK(nreveal == neditable);  /* every player cell is revealed exactly once */
+    rb_tut_board(p, RB_TUT_STEPS - 1, &g, emph);
+    CHECK(grid_complete(&g) && grid_wins(&g));
+    for (r = 0; r < 5; r++) for (s = 0; s < 5; s++) for (k = 0; k < g.width[r][s]; k++) CHECK(g.digit[r][s][k] == puzzle_number(p, r, s)[k] - '0');
+    rb_tut_board(p, 4, &g, emph);   /* a middle step: row 2 emphasised, only (1,2,0) revealed so far */
+    CHECK(emph[1][0][0] && emph[1][4][1] && !emph[0][0][0] && !grid_complete(&g));
   }
 
   printf("%d checks, %d failed\n", checks, fails);

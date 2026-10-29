@@ -10,15 +10,17 @@
 #include <string.h>
 
 #include "../shell.h"
+#include "../tutorial.h"
 #include "keyword_core.h"
 #include "keyword_data.h"
+#include "keyword_tutorial.h"
 
 #ifndef KEYWORDSAVEF
 #define KEYWORDSAVEF "/mnt/ext1/keyword.sav"
 #endif
 
 enum { B_RESET = 10, B_PREV, B_NEXT, B_LIST, B_HELP, B_HOME, B_CLOSE, B_DEL, B_DIG = 20, B_LET = 30, B_SLOT = 40 };
-enum { M_PLAY, M_LIST, M_HELP };
+enum { M_PLAY, M_LIST, M_HELP, M_GUIDE };
 
 typedef UiBtn Btn;
 typedef struct { ifont *big, *small; int size; } FontPair;
@@ -29,6 +31,10 @@ static long long stamp[KNUM_PUZZLES]; /* ms since 1970 of the last change to eac
 static int cur = 1, mode = M_PLAY;
 static int reset_armed, updates;
 static char msg[200];
+static KwBoard gboard;              /* the walkthrough board, rebuilt for every redraw; never saved */
+static uint8_t gemph[3][3];         /* words the step emphasises */
+static int gstep;                  /* guided walkthrough (mode M_GUIDE): the step, 0-based */
+static TutPanel gpanel;
 static int left; /* set when the module handed control back to the shell */
 
 static Btn btns[48];
@@ -158,8 +164,10 @@ static void add_btn(int x, int y, int w, int h, int id, const char *label) {
 }
 
 /* the biggest word tile (at most tmax) whose cross fits availW x availH; sets gt, sg, lane and the column widths */
+static const KwBoard *view(void) { return mode == M_GUIDE ? &gboard : &boards[cur]; }
+
 static void grid_size(int availW, int availH, int tmax) {
-  const KwPuzzle *p = boards[cur].p;
+  const KwPuzzle *p = view()->p;
   int r, c, t;
   for (c = 0; c < 3; c++) {
     colw[c] = 1;
@@ -188,10 +196,28 @@ static void grid_place(int x, int y, int availW, int availH) {
   rowy[2] = ly1 + lane;
 }
 
+/* walkthrough: the cross on top, the letter bank and the keyword strip under it (drawn, not buttons), then the step text and
+ * its buttons (tutorial.h) */
+static void guide_layout(int W, int H) {
+  int i, m = 8, availH;
+  nbtn = 0;
+  tut_layout(TUT_KEYWORD, gstep, W, H, &gpanel);
+  for (i = 0; i < gpanel.nbtn; i++) add_btn(gpanel.btn[i].x, gpanel.btn[i].y, gpanel.btn[i].w, gpanel.btn[i].h, gpanel.btn[i].id, gpanel.btn[i].label);
+  ts = (W - 2 * m - 9 * 2) / 10;
+  if (ts > 60) ts = 60;
+  bank_x = (W - (10 * ts + 9 * 2)) / 2;
+  strip_y = gpanel.top - 8 - ts;
+  bank_y = strip_y - 8 - ts;
+  availH = bank_y - 8 - 62;
+  grid_size(W - 2 * m, availH, 90);
+  grid_place(m, 62, W - 2 * m, availH);
+}
+
 static void layout(int W, int H) {
   int m = 8, gap = 6, k;
   int tb = 58;
   int by, bh, bx, bw, ph, pw;
+  if (mode == M_GUIDE) { guide_layout(W, H); return; }
   nbtn = 0;
 
   add_btn(m, m, 120, tb - m, B_LIST, tr(&S_LIST));
@@ -240,7 +266,7 @@ static void layout(int W, int H) {
 /* one letter tile of size s at (x, y): the letter, or the digit big with the letter small in the corner once it has one;
  * inverted = black (digit conflict / leading zero); the selected letter has a thick frame and a grey ground */
 static void draw_tile(int x, int y, int s, int letter, const FontPair *fp, int inverted) {
-  const KwBoard *b = &boards[cur];
+  const KwBoard *b = view();
   int d = b->val[letter], sel = (b->sel == letter), ix = x + 1, iy = y + 1, is = s - 2, i;
   int ink = inverted ? WHITE : BLACK;
   FillArea(ix, iy, is, is, inverted ? BLACK : sel ? 0xBBBBBB : WHITE);
@@ -267,7 +293,7 @@ static void draw_sign(int x, int y, int w, int h, const char *sym, int wrong) {
 static const char *op_sym(int op) { return op == '*' ? "×" : op == '+' ? "+" : "−"; }
 
 static void draw_grid(const KwStatus *st) {
-  const KwPuzzle *p = boards[cur].p;
+  const KwPuzzle *p = view()->p;
   int r, c, k;
   for (r = 0; r < 3; r++) {
     for (c = 0; c < 3; c++) {
@@ -275,6 +301,10 @@ static void draw_grid(const KwStatus *st) {
       for (k = 0; k < len; k++) {
         int l = p->w[r][c][k];
         draw_tile(x0 + k * gt, rowy[r], gt, l, &fg, st->conflict[l] || (k == 0 && st->lead0[r][c]));
+      }
+      if (mode == M_GUIDE && gemph[r][c]) { /* the emphasised word gets a thick frame around its tiles */
+        int t;
+        for (t = 0; t < 3; t++) DrawRect(x0 - 2 - t, rowy[r] - 2 - t, len * gt + 4 + 2 * t, gt + 4 + 2 * t, BLACK);
       }
     }
     draw_sign(colx[0] + colw[0] * gt, rowy[r], sg, gt, op_sym(kw_row_op(r)), st->eq[r] == KW_WRONG);
@@ -360,6 +390,20 @@ static void draw_play(void) {
   draw_status(&st);
 }
 
+static void draw_guide(int W) {
+  KwStatus st;
+  int k;
+  tut_draw(TUT_KEYWORD, gstep, W, &gpanel);
+  kw_status(&gboard, &st);
+  draw_grid(&st);
+  for (k = 0; k < KW_LETTERS; k++) {
+    Btn slot;
+    draw_tile(bank_x + k * (ts + 2), bank_y, ts, k, &fb, st.conflict[k]);
+    slot.x = bank_x + k * (ts + 2); slot.y = strip_y; slot.w = ts; slot.h = ts; slot.id = B_SLOT + k; slot.label = "";
+    draw_slot(&slot, &st);
+  }
+}
+
 static void draw_list(int W, int H) {
   int i, m = 12, top = 70, gap = 10, cols = 4, rows = (KNUM_PUZZLES + cols - 1) / cols;
   int bw = (W - 2 * m - (cols - 1) * gap) / cols, bh = (H - top - 90 - (rows - 1) * gap) / rows;
@@ -376,11 +420,11 @@ static void draw_list(int W, int H) {
     add_btn(x, y, bw, bh, 100 + i, "");
   }
   {
-    int bwid = 200, bx = (W - 2 * bwid - 20) / 2, by = H - 80; /* Back (to the puzzle) and Home (to the main menu) */
-    add_btn(bx, by, bwid, 64, B_CLOSE, tr(&S_BACK));
-    add_btn(bx + bwid + 20, by, bwid, 64, B_HOME, tr(&S_HOME));
-    ui_draw_btn(&btns[nbtn - 2]);
-    ui_draw_btn(&btns[nbtn - 1]);
+    int bwid = (W - 2 * m - 2 * gap) / 3, by = H - 80; /* Back (to the puzzle), How to solve and Home (to the main menu) */
+    add_btn(m, by, bwid, 64, B_CLOSE, tr(&S_BACK));
+    add_btn(m + bwid + gap, by, bwid, 64, TUT_B_GUIDE, tr(&TUT_S_GUIDE));
+    add_btn(m + 2 * (bwid + gap), by, bwid, 64, B_HOME, tr(&S_HOME));
+    for (i = nbtn - 3; i < nbtn; i++) ui_draw_btn(&btns[i]);
   }
 }
 
@@ -391,7 +435,7 @@ static void draw_help(int W, int H) {
 }
 
 static void set_letters(void) {
-  const KwPuzzle *p = boards[cur].p;
+  const KwPuzzle *p = view()->p;
   int k;
   for (k = 0; k < KW_LETTERS; k++) ui_utf8(p->let[k], letter_txt[k]);
 }
@@ -399,7 +443,8 @@ static void set_letters(void) {
 static void redraw(int full) {
   int W = ScreenWidth(), H = ScreenHeight();
   ui_fonts(28);
-  if (mode == M_PLAY) {
+  if (mode == M_GUIDE) kt_tut_board(&KPUZZLES[0], gstep, &gboard, gemph);
+  if (mode == M_PLAY || mode == M_GUIDE) {
     set_letters();
     layout(W, H);
     ensure_fonts(&fg, gt);
@@ -407,6 +452,7 @@ static void redraw(int full) {
   }
   ClearScreen();
   if (mode == M_PLAY) draw_play();
+  else if (mode == M_GUIDE) draw_guide(W);
   else if (mode == M_LIST) draw_list(W, H);
   else draw_help(W, H);
   updates++;
@@ -421,6 +467,7 @@ static void open_puzzle(int i) {
   reset_armed = 0; msg[0] = 0;
   boards[cur].sel = -1;
   if (solved[cur]) strcpy(msg, tr(&S_SOLVED_BEFORE));
+  else if (boards[cur].p->tutorial) strcpy(msg, tr(&TUT_S_HINT));
   save_state();
 }
 
@@ -458,6 +505,11 @@ static void do_button(int id) {
     case B_LIST: mode = M_LIST; break;
     case B_HELP: mode = M_HELP; break;
     case B_CLOSE: mode = M_PLAY; break;
+    case TUT_B_GUIDE: mode = M_GUIDE; gstep = 0; break;
+    case TUT_B_BACK: case TUT_B_NEXT: case TUT_B_SKIP:
+      gstep = tut_next_step(TUT_KEYWORD, gstep, id);
+      if (gstep < 0) { gstep = 0; mode = M_LIST; }
+      break;
     case B_HOME: left = 1; shell_leave(); return;
     default: break;
   }
@@ -523,10 +575,16 @@ static int keyword_event(int type, int par1, int par2) {
       break;
     case EVT_KEYPRESS:
       if (par1 == KEY_BACK) {
-        if (mode != M_PLAY) { mode = M_PLAY; redraw(1); }
+        if (mode == M_GUIDE) { mode = M_LIST; redraw(1); }
+        else if (mode != M_PLAY) { mode = M_PLAY; redraw(1); }
         else shell_leave();
       } else if (par1 == KEY_HOME || par1 == KEY_MENU) {
         shell_leave(); /* the reader's hardware button: straight back to the home screen */
+      } else if (mode == M_GUIDE && (par1 == KEY_PREV || par1 == KEY_NEXT)) {
+        /* the reader's page keys step through the walkthrough (the last step is left with its Done button) */
+        if (par1 == KEY_PREV) gstep = gstep > 0 ? gstep - 1 : 0;
+        else if (gstep + 1 < TUT_COUNT[TUT_KEYWORD]) gstep++;
+        redraw(1);
       } else if (par1 == KEY_PREV && mode == M_PLAY) {
         open_puzzle(cur - 1); redraw(1);
       } else if (par1 == KEY_NEXT && mode == M_PLAY) {
