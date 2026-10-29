@@ -56,6 +56,8 @@ def solve_script(W, H, tag):
           'tapl Reset', 'expect Tap Reset again', 'tapl Reset', 'tapl Check', 'expect No mistakes',
           # back to the shell: counts, random puzzle (only p15 is unsolved), help, Back key closes the app
           'tapl Home', 'expect 14 / 15 solved', 'tapl Random', 'expect Puzzle 15/15',
+          # the Home button on the list screen goes to the main menu
+          'tapl List', 'tapl Home', 'expect 14 / 15 solved', 'tapl Random',
           # hardware Home/Menu key: from the puzzle, from the list and from the help straight to the home screen
           'key 23', 'expect 14 / 15 solved', 'tapl Random', 'tapl List', 'key 23', 'expect 14 / 15 solved', 'tapl Random', 'tapl ?', 'key 26', 'expect 14 / 15 solved', 'tapl Random', 'tapl Home',
           'tapl ?', 'expect Puzzle Book - help', 'tap 300 400', 'expect Random', 'key 27', 'expect_closed']
@@ -185,6 +187,15 @@ EOS
   if REBUS_SCRIPT="$T/lang-$tag.script" "$T/ui"; then echo "PASS languages $tag"; else echo "FAIL languages $tag"; RC=1; fi
   if [ "$(cat "$T/cfg")" = "lang=en" ]; then echo "PASS language saved"; else echo "FAIL language saved: $(cat "$T/cfg")"; RC=1; fi
 done
+
+# the list screen's Home button in Russian and German
+rm -f "$T/cfg" "$T/rebus.sav"
+printf 'lang=ru\\n' > "$T/cfg"
+printf 'size 600 800\\nshow\\ntapl Ребусы с квадратиками\\ntapl Список\\nexpect Выберите ребус\\ntapl Домой\\nexpect Головоломки\\nexpect решено\\nquit\\n' > "$T/list-ru.script"
+if REBUS_SCRIPT="$T/list-ru.script" "$T/ui"; then echo "PASS list Home ru"; else echo "FAIL list Home ru"; RC=1; fi
+printf 'lang=de\\n' > "$T/cfg"
+printf 'size 800 600\\nshow\\ntapl Zahlenrätsel-Quadrate\\ntapl Liste\\nexpect Rätsel wählen\\ntapl Start\\nexpect Rätselbuch\\nexpect gelöst\\nquit\\n' > "$T/list-de.script"
+if REBUS_SCRIPT="$T/list-de.script" "$T/ui"; then echo "PASS list Home de"; else echo "FAIL list Home de"; RC=1; fi
 
 # system default follows the reader's language (language=ru in global.cfg); an unknown one falls back to English
 rm -f "$T/cfg" "$T/rebus.sav"

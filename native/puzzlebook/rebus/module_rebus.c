@@ -354,8 +354,10 @@ static void draw_list(int W, int H) {
     add_btn(x, y, bw, bh, 100 + i, "");
   }
   {
-    int bwid = 200, bx = (W - bwid) / 2, by = H - 80;
+    int bwid = 200, bx = (W - 2 * bwid - 20) / 2, by = H - 80; /* Back (to the puzzle) and Home (to the main menu) */
     add_btn(bx, by, bwid, 64, B_CLOSE, tr(&S_BACK));
+    add_btn(bx + bwid + 20, by, bwid, 64, B_HOME, tr(&S_HOME));
+    ui_draw_btn(&btns[nbtn - 2]);
     ui_draw_btn(&btns[nbtn - 1]);
   }
 }
