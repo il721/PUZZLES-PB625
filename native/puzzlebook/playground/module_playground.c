@@ -54,8 +54,10 @@ static int tray_x, tray_y, tray_cols, tray_tile, tray_gap, tray_cs;
 /* swap blocks */
 static int sbx, sby, scs;
 
-static ifont *f_node;
+static ifont *f_node, *f_mini;
 static int f_node_size;
+/* the goal picture of Eight chips (bottom left in portrait, bottom of the right column in landscape) */
+static int gp_on, gp_x, gp_y, gp_sz;
 
 /* ---------- texts (English, Russian, German; i18n.h) ---------- */
 
@@ -100,6 +102,7 @@ static const Str S_LOOPS = S("The line closes into several loops.", "Линия 
 static const Str S_LINES = S("Some row, column or diagonal is not right yet.", "Какая-то строка, столбец или диагональ ещё не готова.",
                              "Eine Zeile, Spalte oder Diagonale stimmt noch nicht.");
 static const Str S_FULL = S("Move limit reached - press Reset.", "Предел ходов — нажмите «Сбросить».", "Zuglimit erreicht - „Reset“ tippen.");
+static const Str S_GOAL = S("Goal", "Цель", "Ziel");
 static const Str S_LS_NEW = S("new", "новая", "neu");
 static const Str S_LS_PLAY = S("in progress", "в процессе", "begonnen");
 static const Str S_LS_DONE = S("solved", "решена", "gelöst");
@@ -331,6 +334,7 @@ static void layout(int W, int H) {
   int land = W > H, m = 8, gap = 6, tb = land ? 52 : 58;
   int kind = pg_kind(cur), top = tb + 6;
   nbtn = 0;
+  gp_on = 0;
   add_btn(m, m, 120, tb - m, B_LIST, tr(&S_LIST));
   add_btn(W - m - 90, m, 90, tb - m, B_HOME, tr(&S_HOME));
   add_btn(W - m - 90 - gap - 60, m, 60, tb - m, B_HELP, "?");
@@ -355,6 +359,16 @@ static void layout(int W, int H) {
     st_h = lh * (kind == PGK_TILES ? 4 : 3) + 6;
     st_w = W - 2 * m;
     st_x = m;
+    if (cur == PG_EIGHT) { /* the goal picture bottom left, the text to its right */
+      gp_on = 1;
+      gp_sz = 126;
+      if (st_h < gp_sz) st_h = gp_sz;
+      gp_x = m;
+      gp_y = ctrl_top - gap - gp_sz;
+      st_x = m + gp_sz + gap;
+      st_w = W - m - st_x;
+      st_h = gp_sz;
+    }
     st_y = ctrl_top - gap - st_h;
     bx0 = m; by0 = top; bw0 = W - 2 * m; bh0 = st_y - gap - top;
     if (kind == PGK_TILES) layout_tiles_portrait(bx0, by0, bw0, bh0);
@@ -427,6 +441,13 @@ static void layout(int W, int H) {
           add_btn(rx + w2 + gap, y + rowh + gap, rw - w2 - gap, rowh, B_NEXT, ">");
         }
         st_x = rx; st_w = rw; st_y = top; st_h = y - gap - st_y;
+        if (cur == PG_EIGHT) { /* the goal picture at the bottom of the column, the text above it */
+          gp_on = 1;
+          gp_sz = rw < 160 ? rw : 150;
+          gp_x = rx + (rw - gp_sz) / 2;
+          gp_y = y - gap - gp_sz;
+          st_h = gp_y - gap - st_y;
+        }
       }
     }
   }
@@ -491,6 +512,34 @@ static void draw_graph(const PgState *s) {
     } else {
       fill_circle(nx[i], ny[i], nr, BLACK);
     }
+  }
+}
+
+/* the goal of Eight chips as a small picture: chip t where chip 9-t stood, the centre free */
+static void draw_goal(void) {
+  int i, lab = ui_f_tiny->height + 2, box = gp_sz, cr = box / 11, size = box - lab - 2 * (cr + 3);
+  int ox = gp_x + cr + 3, oy = gp_y + lab + cr + 3;
+  char t[4] = {0, 0, 0, 0};
+  {
+    static int mini_size;
+    if (!f_mini || mini_size != cr) {
+      if (f_mini) CloseFont(f_mini);
+      f_mini = ui_open_font("LiberationSans-Bold", cr * 12 / 10 < 12 ? 12 : cr * 12 / 10);
+      mini_size = cr;
+    }
+  }
+  FillArea(gp_x, gp_y, box, box, WHITE);
+  frame(gp_x, gp_y, box, box, 2, BLACK);
+  ui_text_center(ui_f_tiny, BLACK, gp_x, gp_y + 2, box, lab, tr(&S_GOAL));
+  for (i = 0; i < 9; i++) {
+    int x, y, cx, cy;
+    pg_node_xy(PG_EIGHT, i, &x, &y);
+    cx = ox + size * x / 1000;
+    cy = oy + size * y / 1000;
+    if (i == 8) { ring_circle(cx, cy, cr, 1, WHITE); continue; }
+    ring_circle(cx, cy, cr, 2, 0xDDDDDD);
+    t[0] = (char)('0' + 8 - i);
+    ui_text_center(f_mini, BLACK, cx - cr, cy - cr, 2 * cr, 2 * cr, t);
   }
 }
 
@@ -696,6 +745,7 @@ static void draw_play(void) {
   if (is_graph()) draw_graph(&st[cur]);
   else if (is_tiles()) draw_tiles(&st[cur]);
   else draw_swap(&st[cur]);
+  if (gp_on) draw_goal();
   draw_status();
 }
 

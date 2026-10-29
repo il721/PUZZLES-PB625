@@ -64,9 +64,10 @@ def moves(g, upto=None):
 L = ['size %d %d' % (W, H), 'show', 'expect 0 / 7 solved', 'tapl Puzzle games']
 for g in range(7):
     L += ['expect ' + TITLES[g]]
-    if g == 0: L += ['svg %s/%s-pg-start.svg' % (OUT, tag)]
+    if g == 0: L += ['expect Goal', 'svg %s/%s-pg-start.svg' % (OUT, tag)]
+    else: L += ['expect_not Goal']
     L += moves(g) + ['expect Solved']
-    if PAR[g]: L += ['expect Solved in %d moves' % PAR[g], 'expect That is the minimum']
+    if PAR[g]: L += ['expect Solved in %d moves' % PAR[g], 'expect minimum!']
     L += ['svg %s/%s-pg-solved%d.svg' % (OUT, tag, g), 'tapl >']
 L += ['expect Eight chips  1/7  ok', 'tapl List', 'expect choose one', 'svg %s/%s-pg-list.svg' % (OUT, tag), 'tapl Back', 'tapl Home', 'expect 7 / 7 solved', 'quit']
 put('pg-play-%s.script' % tag, L)
@@ -117,15 +118,15 @@ put('pg-swap-%s.script' % tag, ['size %d %d' % (W, H), 'show', 'tapl Puzzle game
     'tapl Undo', 'expect Moves: 0', 'quit'])
 
 # --- Russian and German: the first moves, a tile game, the solved message
-LANG = {'ru': dict(tile='Головоломки-игры', title='Восемь фишек', hint='Нажмите фишку', moves='Ходов: 1', solved='Решено за 28 ходов!', opt='Это минимум!',
+LANG = {'ru': dict(tile='Головоломки-игры', title='Восемь фишек', goal='Цель', hint='Нажмите фишку', moves='Ходов: 1', solved='Решено за 28 ходов!', opt='Это минимум!',
                    tiles='Выложено: 1 из 9', g3='Всюду по три', rot='Повернуть', tray='В набор', lst='Выберите игру', st='Список', rules='Фишки 1–8',
                    undo='Отмена', done='решена', best='Рекорд', pick='Сначала выберите'),
-        'de': dict(tile='Denkspiele', title='Acht Chips', hint='Stein antippen', moves='Züge: 1', solved='Gelöst in 28 Zügen!', opt='Das ist das Minimum!',
+        'de': dict(tile='Denkspiele', title='Acht Chips', goal='Ziel', hint='Stein antippen', moves='Züge: 1', solved='Gelöst in 28 Zügen!', opt='Minimum!',
                    tiles='Gelegt: 1 von 9', g3='Überall drei', rot='Drehen', tray='In Vorrat', lst='Spiel wählen', st='Liste', rules='Die Chips 1–8',
                    undo='Rückgängig', done='gelöst', best='Bestwert', pick='Wählen Sie zuerst')}
 for lg, d in LANG.items():
-    L = ['size %d %d' % (W, H), 'show', 'tapl ' + d['tile'], 'expect ' + d['title'], 'expect ' + d['hint']] + moves(0, 1) + ['expect ' + d['moves'], 'tapl ' + d['undo'],
-         'tapl ?', 'expect ' + d['rules'], 'tap 300 400'] + moves(0) + ['expect ' + d['solved'], 'expect ' + d['opt'], 'expect ' + d['best'],
+    L = ['size %d %d' % (W, H), 'show', 'tapl ' + d['tile'], 'expect ' + d['title'], 'expect ' + d['goal'], 'expect ' + d['hint']] + moves(0, 1) + ['expect ' + d['moves'], 'tapl ' + d['undo'],
+         'tapl ?', 'expect ' + d['rules'], 'tap 300 400'] + moves(0) + ['expect ' + d['solved'], 'expect ' + d['opt'], 'expect ' + d['best'], 'svg %s/%s-pg-%s-solved.svg' % (OUT, tag, lg),
          'tapl >', 'tapl >', 'tapl >', 'expect ' + d['g3'], 'tapl ' + d['rot'], 'expect ' + d['pick']] + [tile_tap(3, 0), slot_tap(3, 0), 'expect ' + d['tiles'], 'svg %s/%s-pg-%s-tiles.svg' % (OUT, tag, lg),
          'tapl ' + d['st'], 'expect ' + d['lst'], 'expect ' + d['done'], 'svg %s/%s-pg-%s.svg' % (OUT, tag, lg), 'quit']
     put('pg-%s-%s.script' % (lg, tag), L)
