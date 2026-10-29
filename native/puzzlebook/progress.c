@@ -130,6 +130,14 @@ static void put_entry(FILE *f, const char *id, const ProgEntry *e, int last) {
       for (k = 0; k < e->nlist[l]; k++) fprintf(f, "%s[%d, %d]", k ? ", " : "", e->list[l][k][0], e->list[l][k][1]);
       fprintf(f, "]");
     }
+  } else if (e->has_fill) {
+    fprintf(f, "            \"filled\": {");
+    for (k = 0; k < e->nfill; k++) {
+      char u[4];
+      ui_utf8(e->fill_cp[k], u);
+      fprintf(f, "%s\"%d,%d\": \"%s\"", k ? ", " : "", e->fill[k][0], e->fill[k][1], u);
+    }
+    fprintf(f, "}");
   } else if (e->ndom > 0) {
     fprintf(f, "            \"placed\": [");
     for (k = 0; k < e->ndom; k++)
@@ -270,7 +278,36 @@ static int read_entry(int node, ProgEntry *e) {
       }
     }
   }
-  return e->solved || e->ncells > 0 || e->ndom > 0 || e->nlist[0] > 1 || e->nlist[1] > 1 || e->nlist[2] > 0 || e->nlist[3] > 0; /* an entry with nothing in it is not progress */
+  /* "filled": {"row,col": "letter"} (Squarewords); malformed keys or values are skipped, the module drops letters that
+   * are not its keyword's */
+  {
+    int fl = jfind(node, "filled"), a;
+    if (fl >= 0 && pool[fl].type == J_OBJ) {
+      e->has_fill = 1;
+      for (a = pool[fl].child; a >= 0 && e->nfill < PROG_MAX_FILL; a = pool[a].next) {
+        char kb[16], *comma, *end;
+        long r, c;
+        unsigned cp;
+        if (pool[a].type != J_STR || pool[a].klen < 3 || pool[a].klen >= (int)sizeof kb || pool[a].slen < 1 || pool[a].slen > 3) continue;
+        memcpy(kb, pool[a].key, (size_t)pool[a].klen);
+        kb[pool[a].klen] = 0;
+        comma = strchr(kb, ',');
+        if (!comma) continue;
+        *comma = 0;
+        r = strtol(kb, &end, 10);
+        if (*end || end == kb) continue;
+        c = strtol(comma + 1, &end, 10);
+        if (*end || end == comma + 1 || r < 0 || r > 6 || c < 0 || c > 6) continue;
+        { char u[4] = {0, 0, 0, 0}; memcpy(u, pool[a].str, (size_t)pool[a].slen); cp = ui_cp(u); }
+        if (!cp) continue;
+        e->fill[e->nfill][0] = (unsigned char)r;
+        e->fill[e->nfill][1] = (unsigned char)c;
+        e->fill_cp[e->nfill] = (unsigned short)cp;
+        e->nfill++;
+      }
+    }
+  }
+  return e->solved || e->nfill > 0 || e->ncells > 0 || e->ndom > 0 || e->nlist[0] > 1 || e->nlist[1] > 1 || e->nlist[2] > 0 || e->nlist[3] > 0; /* an entry with nothing in it is not progress */
 }
 
 void progress_apply(int *added, int *updated) {

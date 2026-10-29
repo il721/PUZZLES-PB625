@@ -26,9 +26,9 @@ gcc "$T/shim.o" "$T2"/*.o -o "$T/ui2"
 
 # third variant: the real registry (modules.c): Square Rebuses + Digit Rebuses
 T3="$T/full"; mkdir -p "$T3"
-for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/digit/module_digit.c $N/digit/digit_core.c $N/domino/module_domino.c $N/domino/domino_core.c $N/labyrinth/module_labyrinth.c $N/labyrinth/labyrinth_core.c; do
-  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DDIGITSAVEF="\"$T/digit.sav\"" -DDOMINOSAVEF="\"$T/domino.sav\"" -DLABYRINTHSAVEF="\"$T/labyrinth.sav\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" -DPROGF="\"$T/progress.json\"" \
-    -Itools/fake-inkview -I$N -I$N/rebus -I$N/digit -I$N/domino -I$N/labyrinth -c $f -o "$T3/$(basename $f .c).o"
+for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/digit/module_digit.c $N/digit/digit_core.c $N/domino/module_domino.c $N/domino/domino_core.c $N/labyrinth/module_labyrinth.c $N/labyrinth/labyrinth_core.c $N/squareword/module_squareword.c $N/squareword/squareword_core.c; do
+  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DDIGITSAVEF="\"$T/digit.sav\"" -DDOMINOSAVEF="\"$T/domino.sav\"" -DLABYRINTHSAVEF="\"$T/labyrinth.sav\"" -DSQUAREWORDSAVEF="\"$T/squareword.sav\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" -DPROGF="\"$T/progress.json\"" \
+    -Itools/fake-inkview -I$N -I$N/rebus -I$N/digit -I$N/domino -I$N/labyrinth -I$N/squareword -c $f -o "$T3/$(basename $f .c).o"
 done
 gcc "$T/shim.o" "$T3"/*.o -o "$T/ui3"
 
@@ -338,7 +338,7 @@ def tap(cell): return 'tapi %d' % (G + cell)
 
 def script(W, H, tag):
     land = W > H
-    L = ['size %d %d' % (W, H), 'show', 'expect 0 / 18 solved'] + (['tapl >'] if land else []) + \
+    L = ['size %d %d' % (W, H), 'show', 'expect 0 / 18 solved'] + \
         ['expect Alphabet Labyrinth', 'tapl Alphabet Labyrinth', 'expect Labyrinth 1/18', 'expect Letters: 1 of 33'.replace('1', '2'),
          'svg %s/%s-lab-start.svg' % (OUT, tag)]
     order = list(range(1, len(data))) + [0]
@@ -551,6 +551,223 @@ assert all(r[1] == '0' and r[2] == 'o' for i, r in enumerate(rows) if i not in (
 print('PASS labyrinth merged save file')
 PY
 rm -f "$T/labyrinth.sav" "$P"
+
+# ---- Squarewords (fifth real module, real registry): solve all 18 puzzles with cell + letter taps, portrait and landscape
+python3 - "$T" "$OUT" <<'PY'
+import json, sys
+T, OUT = sys.argv[1:3]
+data = sorted(json.load(open('native/puzzlebook/squareword/module05.json'))['puzzles'], key=lambda p: (not p.get('tutorial'), p['id']))
+
+def solve(p):
+    n, kw = p['n'], p['keyword']
+    g = [[None] * n for _ in range(n)]
+    for r, c, ch in p['givens']: g[r][c] = ch
+    given = {(r, c) for r, c, _ in p['givens']}
+    found = []
+    def ok(r, c, ch):
+        for k in range(n):
+            if k != c and g[r][k] == ch: return False
+            if k != r and g[k][c] == ch: return False
+            if r == c and k != r and g[k][k] == ch: return False
+            if r + c == n - 1 and k != r and g[k][n - 1 - k] == ch: return False
+        return True
+    def rec(pos):
+        if len(found) > 1: return
+        while pos < n * n and g[pos // n][pos % n] is not None: pos += 1
+        if pos == n * n: found.append([row[:] for row in g]); return
+        r, c = divmod(pos, n)
+        for ch in kw:
+            if ok(r, c, ch):
+                g[r][c] = ch; rec(pos + 1); g[r][c] = None
+    rec(0)
+    assert len(found) == 1, 'puzzle must have exactly one solution'
+    return found[0], given
+
+SOL = [solve(p) for p in data]
+json.dump([[''.join(row) for row in s] for s, _ in SOL], open(T + '/squareword-solutions.json', 'w'))
+
+def cell(p, r, c): return 'tapi %d' % (p['n'] + 8 + r * p['n'] + c)   # the title, n + 7 buttons, then the cells in reading order
+
+def fill(p, sol, given, cells=None):
+    L = []
+    for r in range(p['n']):
+        for c in range(p['n']):
+            if (r, c) in given or (cells is not None and (r, c) not in cells): continue
+            L += [cell(p, r, c), 'tapl ' + sol[r][c]]
+    return L
+
+def script(W, H, tag):
+    L = ['size %d %d' % (W, H), 'show', 'expect 0 / 17 solved', 'expect Squarewords', 'tapl Squarewords', 'expect Squareword 1/17',
+         'expect Filled: 8 of 25', 'svg %s/%s-sw-start.svg' % (OUT, tag)]
+    order = list(range(1, len(data))) + [0]
+    for n, i in enumerate(order):
+        p = data[i]; sol, given = SOL[i]
+        if i in (1, 8, 15):   # half way, with a repeat on the board (a letter in the row of the first free cell), then erased
+            free = [(r, c) for r in range(p['n']) for c in range(p['n']) if (r, c) not in given]
+            half = set(free[:len(free) // 2])
+            L += fill(p, sol, given, half)
+            r0, c0 = free[-1]
+            L += [cell(p, r0, c0), 'tapl ' + p['keyword'][0] if sol[r0][c0] != p['keyword'][0] else 'tapl ' + p['keyword'][1], 'expect repeats',
+                  'svg %s/%s-sw-bad-%d.svg' % (OUT, tag, p['n']), 'tapl ×', 'expect_not repeats', 'tapl ×']
+            L += fill(p, sol, given, set(free) - half)
+        else:
+            L += fill(p, sol, given)
+        L += ['expect Filled: %d of %d' % (p['n'] ** 2, p['n'] ** 2), 'expect Solved!']
+        if i in (4, 15): L.append('svg %s/%s-sw-solved-%d.svg' % (OUT, tag, p['n']))
+        if n < len(order) - 1: L.append('tapl >')
+    # on the Example (solved): Reset (twice), tap a printed cell, a letter with no selection, select / deselect
+    p = data[0]
+    L += ['tapl Reset', 'expect Tap Reset again', 'tapl Reset', 'expect Filled: 8 of 25', 'expect_not Solved!',
+          cell(p, 0, 0), 'tapl ' + p['keyword'][1], 'expect empty cell',                      # printed cell: no selection, a letter says so
+          cell(p, 1, 0), 'svg %s/%s-sw-selected.svg' % (OUT, tag), cell(p, 1, 0), 'tapl ' + p['keyword'][1], 'expect empty cell',
+          cell(p, 1, 0), 'tapl ' + p['keyword'][1], 'expect Filled: 9 of 25',
+          'tapl ×', 'expect Filled: 8 of 25',
+          'tapl List', 'expect Squarewords - choose a puzzle', 'svg %s/%s-sw-list.svg' % (OUT, tag), 'tapl Back',
+          'tapl ?', 'expect How to play', 'svg %s/%s-sw-help.svg' % (OUT, tag), 'key 27', 'expect Example',
+          'key 23', 'expect 17 / 17 solved', 'expect 0 / 15 solved', 'tapl Squarewords', 'tapl List', 'tapl Home', 'expect 17 / 17 solved',
+          'tapl Squarewords', 'tapl Home', 'expect 17 / 17 solved', 'key 27', 'expect_closed']
+    return '\n'.join(L) + '\n'
+
+for W, H, tag in ((600, 800, 'portrait'), (800, 600, 'landscape')):
+    open('%s/squareword-%s.script' % (T, tag), 'w').write(script(W, H, tag))
+PY
+for tag in portrait landscape; do
+  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav" "$T/cfg" "$T/global.cfg"
+  if REBUS_SCRIPT="$T/squareword-$tag.script" "$T/ui3"; then echo "PASS squarewords $tag"; else echo "FAIL squarewords $tag"; RC=1; fi
+done
+# the save file: 18 puzzle lines, 17 solved (the sample was reset), the solved boards reload through the app and win
+python3 - "$T/squareword.sav" "$T/squareword-solutions.json" <<'PY' || { echo "FAIL squareword save file"; RC=1; }
+import json, sys
+lines = open(sys.argv[1]).read().split('\n')
+sol = json.load(open(sys.argv[2]))
+assert lines[0] == 'v1 0', lines[0]
+rows = [l.split(' ') for l in lines[1:19]]
+assert len(rows) == 18 and lines[19] == ''
+assert [r[0] for r in rows] == ['0'] + ['1'] * 17, [r[0] for r in rows]
+assert rows[0][1] == '.' * 25, rows[0]                         # the sample was reset
+for r, n in zip(rows[1:], [5] * 6 + [6] * 8 + [7] * 3):          # every solved board holds the letters of its solution
+    assert len(r[1]) == n * n and r[1].count('.') == n * n - len(r[1].replace('.', '')) and r[1].replace('.', '').isdigit(), r
+assert all(r[2].isdigit() and int(r[2]) > 1700000000000 for r in rows[1:]), rows
+print('PASS squareword save file')
+PY
+rm -f "$T/squareword.sav"
+# the save file survives a restart: solve p01 only, leave, run again, p01 is still solved and Squarewords shows 1 / 17
+python3 - "$T" <<'PY'
+import json, sys
+T = sys.argv[1]
+data = sorted(json.load(open('native/puzzlebook/squareword/module05.json'))['puzzles'], key=lambda p: (not p.get('tutorial'), p['id']))
+sol = json.load(open(T + '/squareword-solutions.json'))
+p = data[1]; n = p['n']; given = {(r, c) for r, c, _ in p['givens']}
+L = ['size 600 800', 'show', 'tapl Squarewords']
+for r in range(n):
+    for c in range(n):
+        if (r, c) not in given: L += ['tapi %d' % (n + 8 + r * n + c), 'tapl ' + sol[1][r][c]]
+L += ['expect Solved!', 'quit']
+open(T + '/sw-restart1.script', 'w').write('\n'.join(L) + '\n')
+open(T + '/sw-restart2.script', 'w').write('\n'.join(['size 600 800', 'show', 'expect 1 / 17 solved', 'tapl Squarewords', 'expect Squareword 1/17', 'expect ok', 'expect Filled: 25 of 25', 'quit']) + '\n')
+PY
+REBUS_SCRIPT="$T/sw-restart1.script" "$T/ui3" >/dev/null
+if REBUS_SCRIPT="$T/sw-restart2.script" "$T/ui3"; then echo "PASS squarewords restart"; else echo "FAIL squarewords restart"; RC=1; fi
+rm -f "$T/squareword.sav"
+
+# Squarewords in Russian and German (the letters stay Cyrillic)
+for lg in ru de; do
+  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav"; printf 'lang=%s\n' $lg > "$T/cfg"
+  if [ $lg = ru ]; then TILE="Сквэрворды"; T1="Сквэрворд 1/17"; F8="Заполнено: 8 из 25"; REP="повторяется"; LS="Выберите головоломку"; HP="Как играть"; HM="Домой"; SOL="Решено!"; LST="Список"; RS="Сбросить"; else TILE="Quadratwörter"; T1="Quadratwort 1/17"; F8="Ausgefüllt: 8 von 25"; REP="wiederholt"; LS="Rätsel wählen"; HP="Spielregeln"; HM="Start"; SOL="Gelöst!"; LST="Liste"; RS="Reset"; fi
+  python3 - "$T" "$lg" "$TILE" "$T1" "$F8" "$REP" "$LS" "$HP" "$HM" "$SOL" "$LST" "$RS" <<'PY'
+import json, sys
+T, lg, TILE, T1, F8, REP, LS, HP, HM, SOL, LST, RS = sys.argv[1:]
+data = sorted(json.load(open('native/puzzlebook/squareword/module05.json'))['puzzles'], key=lambda p: (not p.get('tutorial'), p['id']))
+sol = json.load(open(T + '/squareword-solutions.json'))
+p = data[1]; n = p['n']; given = {(r, c) for r, c, _ in p['givens']}
+def cell(r, c): return 'tapi %d' % (n + 8 + r * n + c)
+free = [(r, c) for r in range(n) for c in range(n) if (r, c) not in given]
+r0, c0 = free[0]
+bad = p['keyword'][0] if sol[1][r0][c0] != p['keyword'][0] else p['keyword'][1]
+L = ['size 600 800', 'show', 'tapl ' + TILE, 'expect ' + T1, 'expect ' + F8, cell(r0, c0), 'tapl ' + bad, 'expect ' + REP, 'tapl ×', 'expect_not ' + REP,
+     'tapl ?', 'expect ' + HP, 'tap 300 400', 'tapl ' + LST, 'expect ' + LS, 'tapl ' + HM, 'expect ' + TILE, 'tapl ' + TILE]
+for (r, c) in free: L += [cell(r, c), 'tapl ' + sol[1][r][c]]
+L += ['expect ' + SOL, 'quit']
+open('%s/sw-%s.script' % (T, lg), 'w').write('\n'.join(L) + '\n')
+PY
+  if REBUS_SCRIPT="$T/sw-$lg.script" "$T/ui3"; then echo "PASS squarewords $lg"; else echo "FAIL squarewords $lg"; RC=1; fi
+done
+rm -f "$T/cfg" "$T/squareword.sav"
+
+# ---- Squarewords progress: "filled" letters in the progress file, both ways, bad entries skipped
+P="$T/progress.json"
+rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav" "$T/cfg" "$P"
+python3 - "$T" <<'PY'
+import json, sys
+T = sys.argv[1]
+data = sorted(json.load(open('native/puzzlebook/squareword/module05.json'))['puzzles'], key=lambda p: (not p.get('tutorial'), p['id']))
+sol = json.load(open(T + '/squareword-solutions.json'))
+def cell(p, r, c): return 'tapi %d' % (p['n'] + 8 + r * p['n'] + c)
+def free(p):
+    g = {(r, c) for r, c, _ in p['givens']}
+    return [(r, c) for r in range(p['n']) for c in range(p['n']) if (r, c) not in g]
+L = ['size 600 800', 'show', 'tapl Squarewords']
+for (r, c) in free(data[1]): L += [cell(data[1], r, c), 'tapl ' + sol[1][r][c]]
+L += ['expect Solved!', 'tapl >']
+for (r, c) in free(data[2])[:3]: L += [cell(data[2], r, c), 'tapl ' + sol[2][r][c]]
+L += ['expect Filled: 11 of 25', 'tapl Home', 'tapl Settings', 'tapl Save progress to a file', 'expect Progress saved.', 'quit']
+open(T + '/swprog-export.script', 'w').write('\n'.join(L) + '\n')
+open(T + '/swprog-import.script', 'w').write('\n'.join([
+  'size 600 800', 'show', 'tapl Settings', 'tapl Load progress from a file', 'tapl Load', 'expect Puzzles added: 2, updated: 0.', 'tapl Back',
+  'expect 1 / 17 solved', 'tapl Squarewords', 'expect Squareword 1/17', 'expect Filled: 25 of 25', 'tapl >', 'expect Squareword 2/17', 'expect Filled: 11 of 25', 'quit']) + '\n')
+PY
+if REBUS_SCRIPT="$T/swprog-export.script" "$T/ui3"; then echo "PASS squarewords progress export"; else echo "FAIL squarewords progress export"; RC=1; fi
+python3 - "$P" "$T/squareword-solutions.json" <<'PY' || { echo "FAIL squarewords progress file content"; RC=1; }
+import json, sys
+b = json.load(open(sys.argv[1]))
+sol = json.load(open(sys.argv[2]))
+data = sorted(json.load(open('native/puzzlebook/squareword/module05.json'))['puzzles'], key=lambda p: (not p.get('tutorial'), p['id']))
+s = b['namespaces']['module_squareword']['puzzles']
+assert list(s) == ['p01', 'p02'], list(s)
+g1 = {(r, c) for r, c, _ in data[1]['givens']}; g2 = {(r, c) for r, c, _ in data[2]['givens']}
+want1 = {'%d,%d' % (r, c): sol[1][r][c] for r in range(5) for c in range(5) if (r, c) not in g1}
+assert s['p01']['solved'] is True and s['p01']['filled'] == want1 and 'cells' not in s['p01']
+free2 = [(r, c) for r in range(5) for c in range(5) if (r, c) not in g2][:3]
+assert s['p02']['solved'] is False and s['p02']['filled'] == {'%d,%d' % (r, c): sol[2][r][c] for r, c in free2}, s['p02']
+assert s['p02']['updatedAt'] > 1700000000000 and s['p02']['elapsedMs'] == 0 and s['p02']['checks'] == 0
+print('PASS squarewords progress file content')
+PY
+rm -f "$T/squareword.sav"
+if REBUS_SCRIPT="$T/swprog-import.script" "$T/ui3"; then echo "PASS squarewords progress import"; else echo "FAIL squarewords progress import"; RC=1; fi
+# the app's shape: printed cells, out-of-range cells, letters outside the keyword and malformed keys are skipped, the rest kept
+python3 - "$T" <<'PY'
+import json, sys
+T = sys.argv[1]
+B = {'bundleVersion': 1, 'namespaces': {'module_squareword': {'puzzles': {
+  'p03': {'filled': {'1,1': 'Р', '0,0': 'К', '9,9': 'К', 'x': 'К', '1,2': 'Я', '1,3': 'У', '3,3': 'К', '2,2': ''}, 'solved': False, 'updatedAt': 1700000000000, 'elapsedMs': 9000},
+  'p04': {'filled': {}, 'solved': True, 'updatedAt': 1700000000000},
+  'p05': {'filled': {}, 'solved': False}}}}}
+json.dump(B, open(T + '/bundle-sw.json', 'w'), ensure_ascii=False)
+open(T + '/swprog-merge.script', 'w').write('\n'.join(['size 600 800', 'show', 'tapl Settings', 'tapl Load progress from a file', 'tapl Load',
+  'expect Puzzles added: 2, updated: 0.', 'quit']) + '\n')
+PY
+cp "$T/bundle-sw.json" "$P"
+rm -f "$T/squareword.sav"
+if REBUS_SCRIPT="$T/swprog-merge.script" "$T/ui3"; then echo "PASS squarewords progress app-shaped bundle"; else echo "FAIL squarewords progress app-shaped bundle"; RC=1; fi
+python3 - "$T/squareword.sav" <<'PY' || { echo "FAIL squarewords merged save file"; RC=1; }
+import sys
+rows = [l.split(' ') for l in open(sys.argv[1]).read().split('\n')[1:19]]
+p03, p04 = rows[3], rows[4]
+# КРУЧА: Р = 1, У = 2, К = 0; (1,1) and (1,3) are free, (3,3) too (К = 0)
+want = ['.'] * 25; want[1 * 5 + 1] = '1'; want[1 * 5 + 3] = '2'; want[3 * 5 + 3] = '0'
+assert p03[0] == '0' and p03[1] == ''.join(want) and p03[2] == '1700000000000', p03
+assert p04[0] == '1' and p04[1] == '.' * 25, p04
+assert all(r[0] == '0' and r[1] == '.' * len(r[1]) for i, r in enumerate(rows) if i not in (3, 4)), rows
+print('PASS squarewords merged save file')
+PY
+rm -f "$T/squareword.sav" "$P"
+
+# ---- the home screen shows every game at once (no paging), portrait and landscape
+for sz in '600 800' '800 600'; do
+  rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav" "$T/cfg" "$T/global.cfg"
+  printf 'size %s\nshow\nexpect Square Rebuses\nexpect Digit Rebuses\nexpect Domino Solitaire\nexpect Alphabet Labyrinth\nexpect Squarewords\nexpect Settings\nexpect_not &gt;\nquit\n' "$sz" > "$T/home-all.script"
+  if REBUS_SCRIPT="$T/home-all.script" "$T/ui3"; then echo "PASS home shows all games ($sz)"; else echo "FAIL home shows all games ($sz)"; RC=1; fi
+done
 
 # ---- Settings > Transfer progress: save to a file, load it into a clean state, merge rules, bad files, ru/de
 P="$T/progress.json"

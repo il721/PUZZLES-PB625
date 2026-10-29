@@ -18,12 +18,13 @@
 /* One puzzle's progress, the unit of the save/load-to-file feature (see progress.c). Cell keys and the entry
  * layout are those of il721/puzzles ("cells": {"row:slot:pos": digit} for Square Rebuses, {"row:col": digit} for
  * Digit Rebuses, "placed": [[[r,c],[r,c]], ...] for Domino Solitaire, "chainA"/"chainZ"/"crosses"/"marks": [[r,c], ...]
- * for Alphabet Labyrinth), so a progress file can move between the
+ * for Alphabet Labyrinth, "filled": {"r,c": "letter"} for Squarewords), so a progress file can move between the
  * reader and the app. progress.c clears the entry before every prog_get, so a module only sets what it uses. */
 #define PROG_MAX_CELLS 80
 #define PROG_MAX_DOMS 28
 #define PROG_LISTS 4
 #define PROG_MAX_LIST 64
+#define PROG_MAX_FILL 49
 typedef struct { char key[12]; int digit; } ProgCell;
 typedef struct {
   int solved;
@@ -35,6 +36,10 @@ typedef struct {
   int has_lists;        /* cell lists: list[0..3] = chainA, chainZ, crosses, marks; each cell is {row, col} */
   int nlist[PROG_LISTS];
   unsigned char list[PROG_LISTS][PROG_MAX_LIST][2];
+  int has_fill;         /* letters ("filled": {"row,col": "Л"}) for Squarewords: fill[k] = {row, col}, fill_cp[k] = code point */
+  int nfill;
+  unsigned char fill[PROG_MAX_FILL][2];
+  unsigned short fill_cp[PROG_MAX_FILL];
 } ProgEntry;
 
 typedef struct Module {
@@ -75,6 +80,8 @@ void ui_box(int x, int y, int w, int h, int thick, int fill);
 void ui_draw_btn(const UiBtn *b); /* label shrinks (btn -> small -> tiny font) until it fits: Russian/German words are long */
 int ui_hit(const UiBtn *b, int x, int y);
 void ui_log(const char *fmt, int a, int b, int c); /* appends to /mnt/ext1/puzzlebook.txt */
+void ui_utf8(unsigned cp, char *buf);   /* code point to UTF-8, buf needs 4 bytes */
+unsigned ui_cp(const char *s);          /* first UTF-8 character to code point, 0 if malformed */
 long long ui_now_ms(void);                          /* ms since 1970 (stamps for ProgEntry.updated_at) */
 
 #endif

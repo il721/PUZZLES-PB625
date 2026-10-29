@@ -7,11 +7,11 @@
 #include "shell.h"
 #include "progress.h"
 
-enum { H_RANDOM = 1000, H_HELP, H_EXIT, H_PREV, H_NEXT, H_SETTINGS, H_BACK, H_EXPORT, H_IMPORT, H_CANCEL, H_APPLY, H_LANG = 1100, H_TILE = 2000 };
+enum { H_RANDOM = 1000, H_HELP, H_EXIT, H_SETTINGS, H_BACK, H_EXPORT, H_IMPORT, H_CANCEL, H_APPLY, H_LANG = 1100, H_TILE = 2000 };
 enum { HM_HOME, HM_HELP, HM_SETTINGS, HM_CONFIRM };
 
 static const Module *active; /* NULL = home screen */
-static int home_mode = HM_HOME, page, updates;
+static int home_mode = HM_HOME, updates;
 static char settings_msg[200], import_date[24]; /* result line of the last progress action; date of the file waiting for confirmation */
 
 static UiBtn btns[40];
@@ -78,15 +78,20 @@ static const Str S_HELP_TEXT = S(
     "Der Fortschritt liegt auf dem Laufwerk des Readers als <Spiel>.sav neben dem Ordner Applications.\n\n"
     "Tippen Sie irgendwo, um zu schließen.");
 
-/* One tile per row; the bottom bar (Settings, paging) is always there. */
-static int per_page(int W, int H, int *cols, int *tile_h) {
-  int rows, tb = 58, area_h = H - tb - 16 - 70;
+/* All games always fit on one screen (no paging): one tile per row while each row stays at least 80 px high,
+ * otherwise two columns. Tile height is stretched to the free space, at most 150 px. */
+static void tile_layout(int W, int H, int *cols, int *tile_h) {
+  int tb = 58, area_h = H - tb - 16 - 70, gap = 10, n = NUM_MODULES, h;
   (void)W;
   *cols = 1;
-  *tile_h = (W > H) ? 130 : 150;
-  rows = area_h / (*tile_h + 10);
-  if (rows < 1) rows = 1;
-  return *cols * rows;
+  h = (area_h - (n - 1) * gap) / n;
+  if (h < 80) {
+    int rows;
+    *cols = 2;
+    rows = (n + 1) / 2;
+    h = (area_h - (rows - 1) * gap) / rows;
+  }
+  *tile_h = h > 150 ? 150 : h;
 }
 
 /* button width for a label: wide enough, within [min, max]; ui_draw_btn shrinks the font if it still does not fit */
@@ -97,15 +102,51 @@ static int label_w(const char *s, int min, int max) {
   return w < min ? min : (w > max ? max : w);
 }
 
+/* Line k (0-based) of text wrapped at word boundaries into width w with the small font, into out; the last
+ * allowed line (last=1) ends in "..." when text remains. Returns NULL when there is no such line. Words only break at
+ * spaces, so UTF-8 stays intact. */
+static const char *desc_line(const char *text, int k, int w, int last, char *out, int outsz) {
+  const char *p = text, *e;
+  int line = 0, n;
+  SetFont(ui_f_small, BLACK);
+  for (;;) {
+    n = 0;
+    out[0] = 0;
+    while (*p == ' ' || *p == '\n') p++;
+    if (!*p) return NULL;
+    for (;;) {
+      int wl;
+      e = p;
+      while (*e && *e != ' ' && *e != '\n') e++;
+      wl = (int)(e - p);
+      if (n + wl + 1 >= outsz - 4) break;
+      memcpy(out + n + (n ? 1 : 0), p, wl);
+      if (n) out[n] = ' ';
+      out[n + wl + (n ? 1 : 0)] = 0;
+      if (StringWidth(out) > w && n) { out[n] = 0; break; }
+      n += wl + (n ? 1 : 0);
+      p = e;
+      while (*p == ' ') p++;
+      if (!*p || *p == '\n') break;
+    }
+    if (line == k) {
+      if (last && *p && n + 3 < outsz) {
+        while (n > 0 && StringWidth(out) + StringWidth("...") > w) { while (n > 0 && out[n - 1] != ' ') n--; if (n > 0) n--; out[n] = 0; }
+        strcat(out, "...");
+      }
+      return out;
+    }
+    line++;
+  }
+}
+
 static void draw_home(int W, int H) {
-  int m = 8, gap = 10, tb = 58, cols, tile_h, pp = per_page(W, H, &cols, &tile_h), i, first, pages;
-  int tile_w = (W - 2 * m - (cols - 1) * gap) / cols, x, by = H - m - 62;
+  int m = 8, gap = 10, tb = 58, cols, tile_h, i;
+  int tile_w, x, by = H - m - 62;
   const char *exit_t = tr(&S_EXIT), *rand_t = tr(&S_RANDOM), *set_t = tr(&S_SETTINGS);
-  char t[64];
-  pages = (NUM_MODULES + pp - 1) / pp;
-  if (page >= pages) page = pages - 1;
-  if (page < 0) page = 0;
-  first = page * pp;
+  char t[64], dl[200];
+  tile_layout(W, H, &cols, &tile_h);
+  tile_w = (W - 2 * m - (cols - 1) * gap) / cols;
 
   nbtn = 0;
   x = W - m;
@@ -116,29 +157,29 @@ static void draw_home(int W, int H) {
   ui_text_center(StringWidth(tr(&S_TITLE)) > x - gap - m ? ui_f_small : ui_f_title, BLACK, m, m, x - gap - m, tb - m, tr(&S_TITLE));
   for (i = 0; i < nbtn; i++) ui_draw_btn(&btns[i]);
 
-  for (i = first; i < NUM_MODULES && i < first + pp; i++) {
+  for (i = 0; i < NUM_MODULES; i++) {
     const Module *mod = MODULES[i];
-    int idx = i - first, tx = m + (idx % cols) * (tile_w + gap), y = tb + 8 + (idx / cols) * (tile_h + 10);
+    int idx = i, tx = m + (idx % cols) * (tile_w + gap), y = tb + 8 + (idx / cols) * (tile_h + 10);
+    int tw, cw, dy, lines, k;
     ui_box(tx, y, tile_w, tile_h, 3, WHITE);
     SetFont(ui_f_title, BLACK);
-    DrawString(tx + 16, y + 12, tr(&mod->title));
+    tw = StringWidth(tr(&mod->title));
+    DrawString(tx + 16, y + 10, tr(&mod->title));
     snprintf(t, sizeof t, tr(&S_SOLVED), mod->solved_count(), mod->puzzle_count());
     SetFont(ui_f_small, BLACK);
-    DrawString(tx + tile_w - 16 - StringWidth(t), y + 14, t);
-    DrawTextRect(tx + 16, y + 20 + ui_f_title->height, tile_w - 32, tile_h - 28 - ui_f_title->height, (char *)tr(&mod->description), ALIGN_LEFT);
+    cw = StringWidth(t);
+    if (16 + tw + 16 + cw + 16 <= tile_w) { DrawString(tx + tile_w - 16 - cw, y + 14, t); dy = 10 + ui_f_title->height + 4; }
+    else { DrawString(tx + 16, y + 10 + ui_f_title->height, t); dy = 10 + ui_f_title->height + ui_f_small->height + 6; }
+    lines = (tile_h - dy - 6) / (ui_f_small->height + 2);
+    for (k = 0; k < lines; k++) {
+      if (!desc_line(tr(&mod->description), k, tile_w - 32, k == lines - 1, dl, sizeof dl)) break;
+      DrawString(tx + 16, y + dy + k * (ui_f_small->height + 2), dl);
+    }
     add_btn(tx, y, tile_w, tile_h, H_TILE + i, "");
   }
 
   add_btn(m, by, label_w(set_t, 200, 260), 62, H_SETTINGS, set_t);
   ui_draw_btn(&btns[nbtn - 1]);
-  if (pages > 1) {
-    add_btn(W - m - 2 * 100 - gap, by, 100, 62, H_PREV, "<");
-    add_btn(W - m - 100, by, 100, 62, H_NEXT, ">");
-    ui_draw_btn(&btns[nbtn - 2]);
-    ui_draw_btn(&btns[nbtn - 1]);
-    snprintf(t, sizeof t, "%d / %d", page + 1, pages);
-    ui_text_center(ui_f_btn, BLACK, m + label_w(set_t, 200, 260), by, W - 2 * m - label_w(set_t, 200, 260) - 2 * 100 - gap, 62, t);
-  }
 }
 
 static void draw_help(int W, int H) {
@@ -296,8 +337,6 @@ static void home_tap(int x, int y) {
     else if (b->id == H_RANDOM) random_puzzle();
     else if (b->id == H_HELP) { home_mode = HM_HELP; redraw_home(1); }
     else if (b->id == H_EXIT) CloseApp();
-    else if (b->id == H_PREV) { page--; redraw_home(1); }
-    else if (b->id == H_NEXT) { page++; redraw_home(1); }
     return;
   }
 }
