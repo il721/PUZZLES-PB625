@@ -130,6 +130,11 @@ static void put_entry(FILE *f, const char *id, const ProgEntry *e, int last) {
       for (k = 0; k < e->nlist[l]; k++) fprintf(f, "%s[%d, %d]", k ? ", " : "", e->list[l][k][0], e->list[l][k][1]);
       fprintf(f, "]");
     }
+  } else if (e->state_json) {
+    /* Puzzle games: only solved games are exported, as the game's start position with an empty move list - the app rebuilds
+     * its board from the moves, so this loads there as "solved, best N moves" on a fresh board */
+    fprintf(f, "            %s,\n            \"moveStack\": [],\n            \"moveCount\": 0", e->state_json);
+    if (e->best_moves > 0) fprintf(f, ",\n            \"bestMoves\": %d", e->best_moves);
   } else if (e->has_asg) {
     fprintf(f, "            \"assignment\": {");
     for (k = 0; k < e->nasg; k++) {
@@ -156,7 +161,7 @@ static void put_entry(FILE *f, const char *id, const ProgEntry *e, int last) {
     for (k = 0; k < e->ncells; k++) fprintf(f, "%s\"%s\": %d", k ? ", " : "", e->cells[k].key, e->cells[k].digit);
     fprintf(f, "}");
   }
-  fprintf(f, ",\n            \"elapsedMs\": 0,\n            \"checks\": 0,\n            \"solved\": %s", e->solved ? "true" : "false");
+  fprintf(f, ",\n            \"elapsedMs\": 0,%s\n            \"solved\": %s", e->state_json ? "" : "\n            \"checks\": 0,", e->solved ? "true" : "false");
   if (e->updated_at > 0) fprintf(f, ",\n            \"updatedAt\": %lld", e->updated_at);
   fprintf(f, "\n          }%s\n", last ? "" : ",");
 }
@@ -224,10 +229,12 @@ int progress_open(char *exported_at, int n) {
 }
 
 /* the source's mergePuzzleEntry, as far as this app tracks it: solved beats unsolved; two solved copies tie;
- * between two unsolved copies the later updatedAt wins (a stamp beats none); a tie keeps the local copy */
+ * between two solved copies the lower bestMoves wins, between two unsolved copies the later updatedAt wins (a stamp beats
+ * none); a tie keeps the local copy */
 static int incoming_wins(const ProgEntry *loc, const ProgEntry *in) {
   if (loc->solved != in->solved) return in->solved;
-  if (loc->solved) return 0;
+  if (loc->solved) /* two solved copies: the better move count wins (present beats absent), otherwise a tie */
+    return in->best_moves > 0 && (loc->best_moves == 0 || in->best_moves < loc->best_moves);
   if (loc->updated_at == in->updated_at) return 0;
   if (loc->updated_at == 0) return 1;
   if (in->updated_at == 0) return 0;
@@ -240,6 +247,10 @@ static int read_entry(int node, ProgEntry *e) {
   if (pool[node].type != J_OBJ) return 0;
   e->solved = (s >= 0 && pool[s].type == J_BOOL && pool[s].num) ? 1 : 0;
   if (u >= 0 && pool[u].type == J_NUM && pool[u].num > 0) e->updated_at = pool[u].num;
+  {
+    int bm = jfind(node, "bestMoves");
+    if (bm >= 0 && pool[bm].type == J_NUM && pool[bm].num > 0 && pool[bm].num <= 100000) e->best_moves = (int)pool[bm].num;
+  }
   if (c >= 0 && pool[c].type == J_OBJ)
     for (k = pool[c].child; k >= 0 && e->ncells < PROG_MAX_CELLS; k = pool[k].next) {
       ProgCell *pc = &e->cells[e->ncells];

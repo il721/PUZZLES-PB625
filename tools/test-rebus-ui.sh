@@ -26,9 +26,9 @@ gcc "$T/shim.o" "$T2"/*.o -o "$T/ui2"
 
 # third variant: the real registry (modules.c): Square Rebuses + Digit Rebuses
 T3="$T/full"; mkdir -p "$T3"
-for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/digit/module_digit.c $N/digit/digit_core.c $N/domino/module_domino.c $N/domino/domino_core.c $N/labyrinth/module_labyrinth.c $N/labyrinth/labyrinth_core.c $N/squareword/module_squareword.c $N/squareword/squareword_core.c $N/keyword/module_keyword.c $N/keyword/keyword_core.c; do
-  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DDIGITSAVEF="\"$T/digit.sav\"" -DDOMINOSAVEF="\"$T/domino.sav\"" -DLABYRINTHSAVEF="\"$T/labyrinth.sav\"" -DSQUAREWORDSAVEF="\"$T/squareword.sav\"" -DKEYWORDSAVEF="\"$T/keyword.sav\"" -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" -DPROGF="\"$T/progress.json\"" \
-    -Itools/fake-inkview -I$N -I$N/rebus -I$N/digit -I$N/domino -I$N/labyrinth -I$N/squareword -I$N/keyword -c $f -o "$T3/$(basename $f .c).o"
+for f in $N/shell.c $N/ui.c $N/i18n.c $N/progress.c $N/modules.c $N/rebus/module_rebus.c $N/rebus/rebus_core.c $N/digit/module_digit.c $N/digit/digit_core.c $N/domino/module_domino.c $N/domino/domino_core.c $N/labyrinth/module_labyrinth.c $N/labyrinth/labyrinth_core.c $N/squareword/module_squareword.c $N/squareword/squareword_core.c $N/keyword/module_keyword.c $N/keyword/keyword_core.c $N/playground/module_playground.c $N/playground/pg_core.c; do
+  gcc -Wall -Wextra -std=gnu99 -Dmain=rebus_main -DSAVEF="\"$T/rebus.sav\"" -DDIGITSAVEF="\"$T/digit.sav\"" -DDOMINOSAVEF="\"$T/domino.sav\"" -DLABYRINTHSAVEF="\"$T/labyrinth.sav\"" -DSQUAREWORDSAVEF="\"$T/squareword.sav\"" -DKEYWORDSAVEF="\"$T/keyword.sav\"" -DPLAYGROUNDSAVEF="\"$T/playground.sav\"" -DPG_GEOM_LOG -DLOGF="\"$T/log.txt\"" -DCFGF="\"$T/cfg\"" -DSYSCFGF="\"$T/global.cfg\"" -DPROGF="\"$T/progress.json\"" \
+    -Itools/fake-inkview -I$N -I$N/rebus -I$N/digit -I$N/domino -I$N/labyrinth -I$N/squareword -I$N/keyword -I$N/playground -c $f -o "$T3/$(basename $f .c).o"
 done
 gcc "$T/shim.o" "$T3"/*.o -o "$T/ui3"
 
@@ -159,7 +159,7 @@ def script(W, H, tag):
           'tapl ?', 'expect How to play', 'svg %s/%s-digit-help.svg' % (OUT, tag), 'key 27', 'expect Example',
           # Home key and the list's Home button lead to the shell; counts there
           'key 23', 'expect 18 / 18 solved', 'expect 0 / 15 solved', 'tapl Digit Rebuses', 'tapl List', 'tapl Home', 'expect 18 / 18 solved',
-          'tapl Random', 'expect /1', 'key 26', 'expect 18 / 18 solved', 'key 27', 'expect_closed']
+          'tapl Random', 'expect Home', 'key 26', 'expect 18 / 18 solved', 'key 27', 'expect_closed']
     return '\n'.join(L) + '\n'
 
 for W, H, tag in ((600, 800, 'portrait'), (800, 600, 'landscape')):
@@ -970,10 +970,85 @@ print('PASS keyword rebuses merged save file')
 PY
 rm -f "$T/keyword.sav" "$P"
 
+# ---- Puzzle games (eighth real module, real registry): every game solved by tapping its recorded solution, portrait and
+# landscape; undo / reset / rules, the tile games and the swap blocks, a restart, ru / de, and the progress transfer (portrait)
+PG=tools/test-playground-gen.py
+run_pg() { if REBUS_SCRIPT="$T/$2" "$T/ui3"; then echo "PASS puzzle games $1"; else echo "FAIL puzzle games $1"; RC=1; fi; }
+for pair in 'portrait 600 800' 'landscape 800 600'; do
+  set -- $pair; tag=$1; PW=$2; PH=$3
+  rm -f "$T"/*.sav "$T/log.txt" "$T/cfg" "$T/global.cfg"
+  python3 $PG "$T" "$OUT" $tag $PW $PH geom
+  REBUS_SCRIPT="$T/pg-geom-$tag.script" "$T/ui3" || { echo "FAIL puzzle games geometry $tag"; RC=1; }
+  python3 $PG "$T" "$OUT" $tag $PW $PH play
+  rm -f "$T/playground.sav"
+  run_pg "all seven solved ($tag)" pg-play-$tag.script
+  python3 - "$T/playground.sav" <<'PY' || { echo "FAIL puzzle games save file ($tag)"; RC=1; }
+import json, sys
+lines = open(sys.argv[1]).read().split('\n')
+games = json.load(open('native/puzzlebook/playground/module06.json'))['games']
+assert lines[0] == 'v1 0', lines[0]       # the module was left on the first game
+for g, line in zip(games, lines[1:8]):
+    f = line.split()
+    n = len(g['solution'])
+    assert f[0] == '1' and int(f[1]) == n and int(f[3]) == n and len(f) == 4 + n and int(f[2]) > 1700000000000, (g['id'], f[:4])
+print('PASS puzzle games save file')
+PY
+  rm -f "$T/playground.sav"; run_pg "undo, reset and rules ($tag)" pg-undo-$tag.script
+  rm -f "$T/playground.sav"; run_pg "tile games ($tag)" pg-tiles-$tag.script
+  rm -f "$T/playground.sav"; run_pg "swap blocks ($tag)" pg-swap-$tag.script
+  rm -f "$T/playground.sav"
+  if REBUS_SCRIPT="$T/pg-half-$tag.script" "$T/ui3" && REBUS_SCRIPT="$T/pg-resume-$tag.script" "$T/ui3"; then echo "PASS puzzle games resume after a restart ($tag)"; else echo "FAIL puzzle games resume ($tag)"; RC=1; fi
+  for lg in ru de; do
+    rm -f "$T/playground.sav"; printf 'lang=%s\n' $lg > "$T/cfg"
+    run_pg "$lg ($tag)" pg-$lg-$tag.script
+    rm -f "$T/cfg"
+  done
+  if [ $tag = portrait ]; then
+    P="$T/progress.json"
+    rm -f "$T"/*.sav "$P"
+    run_pg "progress export" pg-export-$tag.script
+    python3 - "$P" <<'PY' || { echo "FAIL puzzle games progress file content"; RC=1; }
+import json, sys
+b = json.load(open(sys.argv[1]))
+ns = b['namespaces']
+assert [k for k in ns if ns[k]['puzzles']] == ['module_playground'], list(ns)    # the other modules are untouched
+pz = ns['module_playground']['puzzles']
+assert list(pz) == ['eight_chips'], list(pz)       # cats and dogs is only half played: not exported
+e = pz['eight_chips']
+assert e['solved'] is True and e['bestMoves'] == 28 and e['moveStack'] == [] and e['moveCount'] == 0, e
+assert e['positions'] == {**{'P%d' % i: str(i) for i in range(1, 9)}, 'C': None}, e['positions']
+assert e['updatedAt'] > 1700000000000 and 'checks' not in e
+print('PASS puzzle games progress file content')
+PY
+    rm -f "$T"/*.sav
+    cp "$T/bundle-pg1.json" "$P"
+    run_pg "progress import of an app-shaped bundle" pg-imp1-$tag.script
+    python3 - "$T/playground.sav" 1 <<'PY' || { echo "FAIL puzzle games imported save file"; RC=1; }
+import sys
+rows = [l.split(' ') for l in open(sys.argv[1]).read().split('\n')[1:8]]
+want = [('1', '30', '1700000000000'), ('0', '0', '0'), ('1', '0', '1700000000001'), ('0', '0', '0'), ('1', '0', '1700000000002'), ('0', '0', '0'), ('1', '0', '1700000000003')]
+assert [tuple(r[:3]) for r in rows] == want and all(r[3] == '0' and len(r) == 4 for r in rows), rows
+print('PASS puzzle games imported save file')
+PY
+    cp "$T/bundle-pg2.json" "$P"
+    run_pg "progress merge (better move counts win)" pg-imp2-$tag.script
+    python3 - "$T/playground.sav" <<'PY' || { echo "FAIL puzzle games merged save file"; RC=1; }
+import sys
+rows = [l.split(' ') for l in open(sys.argv[1]).read().split('\n')[1:8]]
+want = [('1', '28', '1700000000004'), ('1', '32', '1700000000005'), ('1', '26', '1700000000006'), ('0', '0', '0'), ('1', '0', '1700000000002'), ('0', '0', '0'), ('1', '40', '1700000000008')]
+assert [tuple(r[:3]) for r in rows] == want, rows
+print('PASS puzzle games merged save file')
+PY
+    run_pg "progress merge again changes nothing" pg-imp3-$tag.script
+    rm -f "$P"
+  fi
+done
+rm -f "$T"/*.sav "$T/cfg" "$T/log.txt"
+
 # ---- the home screen shows every game at once (no paging), portrait and landscape
 for sz in '600 800' '800 600'; do
   rm -f "$T/rebus.sav" "$T/digit.sav" "$T/domino.sav" "$T/labyrinth.sav" "$T/squareword.sav" "$T/keyword.sav" "$T/cfg" "$T/global.cfg"
-  printf 'size %s\nshow\nexpect Square Rebuses\nexpect Digit Rebuses\nexpect Domino Solitaire\nexpect Alphabet Labyrinth\nexpect Squarewords\nexpect Keyword Rebuses\nexpect Settings\nexpect_not &gt;\nquit\n' "$sz" > "$T/home-all.script"
+  printf 'size %s\nshow\nexpect Square Rebuses\nexpect Digit Rebuses\nexpect Domino Solitaire\nexpect Alphabet Labyrinth\nexpect Squarewords\nexpect Keyword Rebuses\nexpect Puzzle games\nexpect Settings\nexpect_not &gt;\nquit\n' "$sz" > "$T/home-all.script"
   if REBUS_SCRIPT="$T/home-all.script" "$T/ui3"; then echo "PASS home shows all games ($sz)"; else echo "FAIL home shows all games ($sz)"; RC=1; fi
 done
 
