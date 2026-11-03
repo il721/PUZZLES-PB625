@@ -15,7 +15,7 @@ touch UI, e-ink friendly (no animations, partial updates, a full refresh every f
 
 ## Install and build
 - Copy `reader/Puzzle Collection.app` to `<drive>:\applications`, eject, open "Puzzle Collection" from the Applications menu. Saves go to `/mnt/ext1/tatham/`.
-- Build (PocketBook SDK 4.8.1, see the repo README "Build"): `make -C native/tatham -j8 SDK=$PWD/sdk` writes `reader/Puzzle Collection.app` (about 1 MB). Needs only `libinkview` and `libc`. Check `readelf -V "reader/Puzzle Collection.app"`: only GLIBC_2.4. Two details keep it there: `-D_GNU_SOURCE` (otherwise the glibc 2.9 headers turn `sscanf` into `__isoc99_sscanf`, GLIBC_2.7) and `tat.h` maps the key names (`KEY_BACK`, the old SDK's names) to the `IV_KEY_*` used by the code.
+- Build (PocketBook SDK 4.8.1, see the repo README "Build"): `make -C native/tatham -j8 SDK=$PWD/sdk` writes `reader/Puzzle Collection.app` (about 1 MB). Needs `libinkview`, `libc` and `libm` (all symbols GLIBC_2.4; `clock_gettime` is avoided because it would pull in `librt`). Check `readelf -V "reader/Puzzle Collection.app"`: only GLIBC_2.4. Two details keep it there: `-D_GNU_SOURCE` (otherwise the glibc 2.9 headers turn `sscanf` into `__isoc99_sscanf`, GLIBC_2.7) and `tat.h` maps the key names (`KEY_BACK`, the old SDK's names) to the `IV_KEY_*` used by the code.
 - The same sources build for the PB634 with its newer SDK (il721/PB634, `apps/tatham`, CMake).
 
 ## Source layout

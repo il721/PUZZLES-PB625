@@ -18,11 +18,13 @@ APP    = main fe tr rules
 PUZOBJ = $(addprefix $(OBJ)/p_,$(addsuffix .o,$(CORE) $(GAMES)))
 APPOBJ = $(addprefix $(OBJ)/a_,$(addsuffix .o,$(APP)))
 
-all: "$(OUT)"
-
-"$(OUT)": $(PUZOBJ) $(APPOBJ)
-	$(CC) -o "$(OUT)" $^ -linkview -lm
+# make cannot take a target with a space in it, so link to $(OBJ)/puzzlecollection and copy
+all: $(OBJ)/puzzlecollection
+	cp $< "$(OUT)"
 	$(STRIP) "$(OUT)"
+
+$(OBJ)/puzzlecollection: $(PUZOBJ) $(APPOBJ)
+	$(CC) -o $@ $^ -linkview -lm
 
 # vendored upstream code: no warnings from it
 $(OBJ)/p_%.o: puzzles/%.c | $(OBJ)

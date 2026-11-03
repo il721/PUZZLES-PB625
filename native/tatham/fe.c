@@ -61,9 +61,9 @@ void get_random_seed(void **randseed, int *randseedsize)
 {
     static unsigned long counter;
     unsigned long *p = snew(unsigned long);
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    *p = (unsigned long)ts.tv_sec * 1000003UL + (unsigned long)ts.tv_nsec + 7919UL * counter++ + (unsigned long)getpid();
+    struct timeval tv;   /* gettimeofday is in libc; clock_gettime would need librt on glibc 2.9 */
+    gettimeofday(&tv, NULL);
+    *p = (unsigned long)tv.tv_sec * 1000003UL + (unsigned long)tv.tv_usec * 1009UL + 7919UL * counter++ + (unsigned long)getpid();
     *randseed = p;
     *randseedsize = sizeof(*p);
 }
