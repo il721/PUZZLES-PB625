@@ -2,3 +2,4 @@
 sdk/
 # PocketBook SDK clone used in the cloud sandbox
 SDK_481/
+__pycache__/

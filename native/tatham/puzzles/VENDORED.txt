@@ -1,0 +1,7 @@
+Simon Tatham's Portable Puzzle Collection, snapshot 20260923.616da16
+Source: https://www.chiark.greenend.org.uk/~sgtatham/puzzles/ (puzzles-20260923.616da16.tar.gz)
+Licence: MIT (see LICENCE). Files are unmodified copies of the upstream .c/.h files
+needed by the engine (midend, drawing, helpers) and the 40 official puzzles, built as
+one binary with -DCOMBINED. generated-games.h is the list of puzzles (written by hand,
+upstream generates it with CMake). Frontend-specific upstream files (GTK, Windows, macOS,
+web, printing) are not included.
