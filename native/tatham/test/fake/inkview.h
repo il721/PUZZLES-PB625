@@ -71,6 +71,9 @@ int TextRectHeight(int width, const char *s, int flags);
 char *DrawTextRect(int x, int y, int w, int h, const char *s, int flags);
 ibitmap *BitmapFromScreen(int x, int y, int w, int h);
 void DrawBitmap(int x, int y, const ibitmap *b);
+#define ICON_INFORMATION 1
+#define ICON_ERROR 4
+void Message(int icon, const char *title, const char *text, int timeout);
 void OpenKeyboard(const char *title, char *buffer, int maxlen, int flags, iv_keyboardhandler hproc);
 void SetPanelType(int type);
 void SetOrientation(int n);

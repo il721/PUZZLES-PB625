@@ -72,6 +72,34 @@ run "40 puzzles end to end" "$S1"
 [ "$(ls "$DATA"/*.sav | wc -l)" -eq 40 ] || { echo "expected 40 save files"; exit 1; }
 echo "   40 save files written"
 
+# ---- 1b. export all saves as one zip, wipe the data folder, import: the files must come back byte for byte ----
+ZIP="$OUT/tatham-saves.zip"
+rm -f "$ZIP"
+S1B="$OUT/s1b.txt"
+printf 'size 1072 1448\nshow\ntapl Menu\ntapfind Export all saves (zip)\nquit\n' > "$S1B"
+run "export saves to a zip" "$S1B"
+python3 -I - "$ZIP" "$DATA" <<'PY'
+import sys, zipfile, glob, os
+z = zipfile.ZipFile(sys.argv[1]); data = sys.argv[2]
+assert z.testzip() is None, "bad crc"
+names = z.namelist()
+assert len(names) == 80, len(names)
+for i in z.infolist(): assert i.compress_type == 0, "entries must be stored"
+for p in glob.glob(data + "/*.sav"):
+    n = os.path.basename(p)
+    assert z.read(n) == open(p, "rb").read(), n
+    assert z.read(n[:-4] + ".st") in (b"0", b"1")
+PY
+echo "   zip has 40 puzzles, stored, CRCs ok"
+rm -rf "$OUT/data-before"; cp -r "$DATA" "$OUT/data-before"
+rm -f "$DATA"/*.sav "$DATA"/*.st
+S1C="$OUT/s1c.txt"
+printf 'size 1072 1448\nshow\ntapl Menu\ntapfind Import saves (zip)\nexpect in progress\nquit\n' > "$S1C"
+run "import saves from the zip" "$S1C"
+for f in "$OUT"/data-before/*.sav; do cmp -s "$f" "$DATA/$(basename "$f")" || { echo "save differs: $f"; exit 1; }; done
+[ "$(ls "$DATA"/*.sav | wc -l)" -eq 40 ] || { echo "expected 40 restored saves"; exit 1; }
+echo "   40 saves restored byte for byte"
+
 # ---- 2. restart: saved games are listed and resume ----
 S2="$OUT/s2.txt"
 cat > "$S2" <<EOT

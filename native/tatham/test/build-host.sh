@@ -16,10 +16,10 @@ FTLIBS=""
 if pkg-config --exists freetype2 2>/dev/null && [ -f /usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf ]; then
   FT="-DUSE_FT $(pkg-config --cflags freetype2)"; FTLIBS="$(pkg-config --libs freetype2)"   # real glyphs and metrics in the fake
 fi
-CF="-O1 -std=gnu11 $SANFLAGS -DCOMBINED -DTAT_DIR=\"$OUT/data\" -DSYSCFGF=\"$OUT/global.cfg\" -I $HERE/test/fake -I $HERE/puzzles"
+CF="-O1 -std=gnu11 $SANFLAGS -DCOMBINED -DTAT_DIR=\"$OUT/data\" -DSYSCFGF=\"$OUT/global.cfg\" -DTAT_ZIP=\"$OUT/tatham-saves.zip\" -I $HERE/test/fake -I $HERE/puzzles"
 for f in $CORE $GAMES; do echo "$f"; done | xargs -P 8 -I{} sh -c \
   "[ \"$OUT/obj/{}.o\" -nt \"$HERE/puzzles/{}.c\" ] && [ \"$OUT/obj/{}.o\" -nt \"$OUT/stamp\" ] || gcc $CF -w $VENDOR -c $HERE/puzzles/{}.c -o $OUT/obj/{}.o"
-for f in main fe tr rules; do
+for f in main fe tr rules savezip; do
   gcc $CF -Wall -Wextra -Wno-unused-parameter $( [ "$f" = main ] && echo -Dmain=app_main ) -c "$HERE/$f.c" -o "$OUT/obj/app_$f.o"
 done
 gcc $CF $FT -Wall -c "$HERE/test/fake_inkview.c" -o "$OUT/obj/fake.o"

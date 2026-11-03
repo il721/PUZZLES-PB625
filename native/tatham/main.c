@@ -8,6 +8,7 @@
 
 #include "tat.h"
 #include "tr.h"
+#include "savezip.h"
 
 enum { SC_HOME, SC_PLAY, SC_LIST, SC_RULES };
 enum { LK_MENU, LK_HOME_MENU, LK_PRESETS, LK_LANG, LK_CONFIG, LK_CONFIRM };
@@ -16,7 +17,7 @@ enum {
     B_ITEM = 100, B_GAME = 200, B_KEY = 300
 };
 enum {
-    M_NEW = 1, M_RESTART, M_SOLVE, M_TYPE, M_RULES, M_LANG, M_THICK, M_CLEAN, M_HOME, M_EXIT,
+    M_NEW = 1, M_RESTART, M_SOLVE, M_TYPE, M_RULES, M_LANG, M_THICK, M_CLEAN, M_HOME, M_EXIT, M_EXPORT, M_IMPORT,
     M_CUSTOM = 50, LG_SYSTEM = 60, LG_EN, LG_RU, LG_DE
 };
 enum { PT_NONE, PT_PENDING, PT_DRAG, PT_RIGHT, PT_IGNORE };   /* PT_IGNORE: the engine did not use the press */
@@ -631,6 +632,8 @@ static void open_home_menu(void)
     list_begin(LK_HOME_MENU, T(S_MENU));
     list_add(M_LANG, T(S_LANGUAGE), 0, 0);
     list_add(M_THICK, thick ? T(S_THICK_ON) : T(S_THICK_OFF), 0, 0);
+    list_add(M_EXPORT, T(S_EXPORT), 0, 0);
+    list_add(M_IMPORT, T(S_IMPORT), 0, 0);
     list_add(M_CLEAN, T(S_CLEAN), 0, 0);
     list_add(M_EXIT, T(S_EXIT), 0, 0);
     list_page = 0;
@@ -805,6 +808,17 @@ static void list_pick(int id)
             paint(0);
             return;
           case M_CLEAN: paint(1); return;
+          case M_EXPORT: case M_IMPORT: {
+            char text[400];
+            int n = id == M_EXPORT ? savezip_export() : savezip_import();
+            if (n >= 0) snprintf(text, sizeof text, id == M_EXPORT ? T(S_EXPORTED) : T(S_IMPORTED), n, TAT_ZIP);
+            else if (n == -2) snprintf(text, sizeof text, "%s", T(S_IMPORT_COMPRESSED));
+            else snprintf(text, sizeof text, id == M_EXPORT ? T(S_EXPORT_FAIL) : T(S_IMPORT_NONE), TAT_ZIP);
+            Message(n >= 0 ? ICON_INFORMATION : ICON_ERROR, T(id == M_EXPORT ? S_EXPORT : S_IMPORT), text, 6000);
+            screen = SC_HOME;
+            paint(1);
+            return;
+          }
           case M_HOME: go_home(); paint(1); return;
           case M_EXIT: close_game(); CloseApp(); return;
         }

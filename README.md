@@ -24,7 +24,7 @@
 - Install: copy `reader/Puzzle Book.app` to `<drive>:\applications`, eject, open it from the Applications menu. Delete an old `Square Rebuses.app` there.
 
 ## Puzzle Collection (second app, 2026-11-03)
-`reader/Puzzle Collection.app` is Simon Tatham's Portable Puzzle Collection (40 logic puzzles: Solo, Mines, Loopy, Galaxies, Pattern, ...) ported from il721/PB634 (`apps/tatham`): touch UI, e-ink friendly, English / Russian / German. A separate app from Puzzle Book; its saves live in `/mnt/ext1/tatham/`. Everything about it (features, build, tests, what is untested) is in `native/tatham/README.md`. Build: `make -C native/tatham -j8 SDK=$PWD/sdk`; host tests: `sh native/tatham/test/test.sh`. NOT tested on the reader yet; the first things to check are listed there.
+`reader/Puzzle Collection.app` is Simon Tatham's Portable Puzzle Collection (40 logic puzzles: Solo, Mines, Loopy, Galaxies, Pattern, ...) ported from il721/PB634 (`apps/tatham`): touch UI, e-ink friendly, English / Russian / German. A separate app from Puzzle Book; its saves live in `/mnt/ext1/tatham/`. Everything about it (features, build, tests, what is untested) is in `native/tatham/README.md`. Home menu has *Export all saves (zip)* / *Import saves (zip)* (`/mnt/ext1/tatham-saves.zip`, same layout as the PB634 and Android versions). Build: `make -C native/tatham -j8 SDK=$PWD/sdk`; host tests: `sh native/tatham/test/test.sh`. NOT tested on the reader yet; the first things to check are listed there.
 
 ## Layout
 - `native/tatham/`: the Puzzle Collection app (vendored upstream puzzles in `puzzles/`, `fe.c` drawing API on InkView, `main.c` UI, `tr.c`/`rules.c` translations, `test/` host tests with a fake InkView).

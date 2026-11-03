@@ -145,6 +145,15 @@ static const char *const UI[S_COUNT][NUM_LANGS] = {
     [S_HOME_DONE] = {"solved", "решена", "gelöst"},
     [S_SOLVE_NO] = {"This puzzle has no solution display.", "Для этой игры нет показа решения.",
                     "Für dieses Rätsel gibt es keine Lösungsanzeige."},
+    [S_EXPORT] = {"Export all saves (zip)", "Экспорт всех сохранений (zip)", "Alle Spielstände exportieren (zip)"},
+    [S_IMPORT] = {"Import saves (zip)", "Импорт сохранений (zip)", "Spielstände importieren (zip)"},
+    [S_EXPORTED] = {"Saved %d puzzles to %s", "Сохранено головоломок: %d в %s", "%d Rätsel gespeichert in %s"},
+    [S_IMPORTED] = {"Restored %d puzzles", "Восстановлено головоломок: %d", "%d Rätsel wiederhergestellt"},
+    [S_IMPORT_NONE] = {"No readable zip found: %s", "Не найден читаемый zip: %s", "Keine lesbare Zip-Datei: %s"},
+    [S_IMPORT_COMPRESSED] = {"This zip is compressed. Export it again from the app (uncompressed zip), or re-pack it with \"store\".",
+                             "Этот zip сжат. Экспортируйте его заново из приложения (zip без сжатия) или перепакуйте с режимом «без сжатия».",
+                             "Diese Zip-Datei ist komprimiert. Exportiere sie erneut aus der App (unkomprimiert) oder packe sie ohne Kompression neu."},
+    [S_EXPORT_FAIL] = {"Could not write %s", "Не удалось записать %s", "%s konnte nicht geschrieben werden"},
 };
 
 const char *T(int id)

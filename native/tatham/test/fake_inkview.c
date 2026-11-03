@@ -356,6 +356,12 @@ void DrawBitmap(int x, int y, const ibitmap *b)
         for (i = 0; i < b->width; i++) put(x + i, y + j, b->data[(size_t)j * b->scanline + i]);
 }
 
+void Message(int icon, const char *title, const char *text, int timeout)
+{
+    (void)timeout;
+    printf("message(%d): %s: %s\n", icon, title, text);
+}
+
 void OpenKeyboard(const char *title, char *buffer, int maxlen, int flags, iv_keyboardhandler h)
 {
     (void)flags;

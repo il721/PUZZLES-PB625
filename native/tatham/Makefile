@@ -13,7 +13,7 @@ OBJ = build
 COMMON = -O2 -std=gnu99 -D_GNU_SOURCE -DCOMBINED -I puzzles
 CORE   = combi divvy draw-poly drawing dsf findloop grid latin laydomino loopgen malloc matching midend misc penrose penrose-legacy ps random sort tdq tree234 version hat spectre list
 GAMES  = $(shell sed 's/GAME(\(.*\))/\1/' puzzles/generated-games.h)
-APP    = main fe tr rules
+APP    = main fe tr rules savezip
 
 PUZOBJ = $(addprefix $(OBJ)/p_,$(addsuffix .o,$(CORE) $(GAMES)))
 APPOBJ = $(addprefix $(OBJ)/a_,$(addsuffix .o,$(APP)))
